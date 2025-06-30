@@ -139,6 +139,9 @@ yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
 
+# Bun lock file (if using npm instead)
+bun.lockb
+
 # Runtime data
 pids
 *.pid
