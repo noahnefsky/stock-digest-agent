@@ -45,7 +45,7 @@ class StockResearch(BaseModel):
 class StockReport(BaseModel):
     ticker: str
     company_name: str
-    executive_summary: str
+    stock_market_overview: str
     current_performance: str
     key_insights: List[str] = Field(default_factory=list)
     recommendation: str
@@ -57,12 +57,14 @@ class StockDigestOutput(BaseModel):
     reports: Dict[str, StockReport] = Field(default_factory=dict)
     generated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     market_overview: str
+    sources: List[Dict] = Field(default_factory=list)  # Add sources field
 
 
 class State(TypedDict):
     tickers: List[str]
     stock_data: Dict[str, StockData]
     research_data: Dict[str, StockResearch]
+    all_news_stories: List[tuple]  # List of (ticker, story) tuples
     structured_reports: StockDigestOutput
     date: str
 
@@ -71,7 +73,7 @@ class StockDigestAgent:
     def __init__(self):
         # Initialize LLMs and clients
         self.gemini_llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-pro",
+            model="gemini-1.5-flash",
             temperature=0.1,
             google_api_key=os.getenv("GOOGLE_API_KEY")
         )
@@ -88,7 +90,9 @@ class StockDigestAgent:
         tickers = state["tickers"]
         stock_data = {}
         
-        for ticker in tickers:
+        # Process only the first ticker
+        if tickers:
+            ticker = tickers[0]
             dispatch_custom_event("ticker_processing", f"Processing {ticker}")
             
             # Fetch stock data
@@ -124,96 +128,211 @@ class StockDigestAgent:
         """Research stocks using Tavily client for current news and analysis"""
         dispatch_custom_event("research_status", "Researching stock news and analysis...")
         
-        stock_data = state["stock_data"]
+        tickers = state["tickers"]
         research_data = {}
+        all_news_stories = []
         
-        for ticker, data in stock_data.items():
+        for ticker in tickers:
             dispatch_custom_event("research_ticker", f"Researching {ticker}")
             
-            # Search for recent news and analysis
-            search_query = f"{ticker} {data.company_name} stock news analysis today {self.current_date}"
+            # Search for recent news and analysis with more comprehensive parameters
+            search_query = f"{ticker} stock news analysis earnings financial performance market sentiment {self.current_date}"
             
             search_results = self.tavily_client.search(
                 query=search_query,
                 search_depth="advanced",
-                max_results=5,
+                max_results=10,
                 include_raw_content=True,
-                days=1  # Focus on recent news
+                include_answer=True,
+                include_images=False,
+                include_domains=["reuters.com", "bloomberg.com", "cnbc.com", "marketwatch.com", "yahoo.com", "seekingalpha.com"],
+                exclude_domains=["twitter.com", "reddit.com"],
+                days=3  # Get news from last 3 days for better context
             )
             
-            # Extract key information from search results
+            # Extract detailed information from search results
             news_content = []
+            news_stories = []
+            
             for result in search_results.get('results', []):
                 if result.get('content'):
                     news_content.append(result['content'])
+                    
+                    # Store individual news stories with metadata
+                    news_stories.append({
+                        'title': result.get('title', ''),
+                        'content': result.get('content', '')[:800],  # Increased to 800 chars for better context
+                        'url': result.get('url', ''),
+                        'published_date': result.get('published_date', ''),
+                        'source': result.get('source', ''),
+                        'score': result.get('score', 0),  # Relevance score
+                        'domain': result.get('domain', '')
+                    })
             
-            # Create research summary
-            combined_content = "\n".join(news_content[:3])  # Limit content
+            # Sort news stories by relevance score (if available) and recency
+            news_stories.sort(key=lambda x: (x.get('score', 0), x.get('published_date', '')), reverse=True)
+            
+            # Add ticker-specific stories to overall collection
+            all_news_stories.extend([(ticker, story) for story in news_stories])
+            
+            # Create research summary with more detailed content
+            combined_content = "\n\n".join(news_content[:5])  # Use more content
+            logger.info(f"Research content length for {ticker}: {len(combined_content)}")
             
             research_data[ticker] = StockResearch(
                 ticker=ticker,
-                news_summary=combined_content[:1000],  # Limit length
+                news_summary=combined_content[:2000],  # Increased length limit
                 key_developments=[],  # Will be filled by LLM analysis
                 analyst_sentiment="Pending analysis",
                 risk_factors=[],
                 price_targets=None
             )
             
-            logger.info(f"Research completed for {ticker}")
+            logger.info(f"Research completed for {ticker} with {len(news_stories)} stories")
         
-        return {"research_data": research_data}
+        # Store all news stories in state for market overview
+        return {
+            "research_data": research_data,
+            "all_news_stories": all_news_stories
+        }
 
     def gemini_analysis_node(self, state: State) -> Dict:
         """Use Gemini LLM to analyze stock data and research, returning structured reports"""
         dispatch_custom_event("gemini_analysis_status", "Generating structured stock reports...")
         
-        stock_data = state["stock_data"]
+        tickers = state["tickers"]
         research_data = state["research_data"]
+        all_news_stories = state.get("all_news_stories", [])
         
-        # Create structured parser using Gemini with structured output
-        structured_llm = self.gemini_llm.with_structured_output(StockDigestOutput)
+        # Create individual reports for each ticker
+        reports = {}
         
-        # Prepare combined data for analysis
-        analysis_data = {}
-        for ticker in stock_data.keys():
-            analysis_data[ticker] = {
-                "stock_data": stock_data[ticker].model_dump(),
-                "research": research_data[ticker].model_dump() if ticker in research_data else {}
-            }
+        for ticker in tickers:
+            research = research_data.get(ticker, {})
+            
+            # Get ticker-specific news stories
+            ticker_stories = [story for ticker_symbol, story in all_news_stories if ticker_symbol == ticker]
+            
+            # Create structured parser for individual stock report
+            structured_llm = self.gemini_llm.with_structured_output(StockReport)
+            
+            analysis_prompt = f"""
+            You are a professional portfolio analyst providing concise updates on stock positions based on recent news and market developments.
+            
+            Analyze the following data for {ticker}:
+            
+            Research Data: {research if isinstance(research, dict) else research.model_dump()}
+            
+            Recent News Stories for {ticker}:
+            {chr(10).join([f"Title: {story['title']}{chr(10)}Content: {story['content']}{chr(10)}Source: {story['source']}{chr(10)}Date: {story['published_date']}{chr(10)}Relevance Score: {story.get('score', 'N/A')}{chr(10)}" for story in ticker_stories[:5]])}
+            
+            Current date: {self.current_date}
+            
+            Create a portfolio-focused report including:
+            1. Stock Market Overview (4-6 sentences covering recent market context and sector trends affecting this specific stock)
+            2. Current Performance (2-3 sentences on recent price action and key metrics)
+            3. Key Insights from recent news (focus on specific events, earnings, analyst actions)
+            4. Investment recommendation (Buy/Hold/Sell with brief reasoning)
+            5. Risk Assessment (2-3 sentences identifying key risks from news)
+            6. Price Outlook (1-2 sentences on near-term expectations)
+            
+            For the Key Insights section, extract specific insights from the news stories above and format them as bullet points. Focus on:
+            - Specific news events and their market impact
+            - Analyst ratings, price targets, and recommendations
+            - Earnings announcements, revenue figures, or financial metrics
+            - Strategic moves, partnerships, or business developments
+            - Regulatory news or legal developments
+            - Market sentiment shifts or institutional actions
+            
+            Format the key insights as clear, concise bullet points that highlight the most important news-driven developments. Each bullet should be a specific, actionable insight from the news feed.
+            
+            IMPORTANT: For the key_insights field, provide each insight as a separate string in the list. Each insight should be:
+            - Concise but informative (1-2 sentences max)
+            - Based directly on the news stories provided
+            - Include specific details like numbers, dates, or analyst names when available
+            - Focus on actionable information that investors can use
+            - Prioritize insights from high-relevance sources (higher score)
+            
+            Examples of good key insights:
+            - "Analyst John Smith upgraded rating to Buy with $150 price target citing strong Q4 earnings"
+            - "Company announced $2B acquisition of TechCorp, expected to close Q2 2024"
+            - "Q3 revenue beat estimates by 15%, driven by 40% growth in cloud services"
+            - "CEO announced new AI partnership with Microsoft, stock up 8% on the news"
+            - "Federal Reserve decision impacts sector, company expects 5% revenue growth"
+            
+            Focus on providing portfolio-relevant updates that help investors understand:
+            - How recent news affects their position
+            - What to watch for in the coming days/weeks
+            - Key risks and opportunities from current events
+            - Actionable insights for portfolio management
+            
+            Provide the ticker symbol as: {ticker}
+            Use a generic company name if not available in the data.
+            """
+            
+            # Generate structured report for this ticker
+            report = structured_llm.invoke(analysis_prompt)
+            reports[ticker] = report
         
-        analysis_prompt = f"""
-        You are a professional stock analyst creating a comprehensive stock digest report.
+        # Generate comprehensive market overview based on all news stories
+        market_overview_prompt = f"""
+        You are a senior market analyst creating a concise market overview based on recent news and developments.
         
-        Analyze the following stock data and research for {len(stock_data)} stocks:
+        Analyze the following news stories from the past few days for these stocks: {', '.join(tickers)}
         
-        {json.dumps(analysis_data, indent=2)}
+        News Stories Summary:
+        {chr(10).join([f"Ticker: {ticker}{chr(10)}Title: {story['title']}{chr(10)}Content: {story['content'][:300]}...{chr(10)}Source: {story['source']}{chr(10)}Date: {story['published_date']}{chr(10)}" for ticker, story in all_news_stories[:15]])}
         
         Current date: {self.current_date}
         
-        For each stock, create a comprehensive report including:
-        1. Executive summary (2-3 sentences)
-        2. Current performance analysis
-        3. Key insights from recent news and data
-        4. Investment recommendation (Buy/Hold/Sell with reasoning)
-        5. Risk assessment
-        6. Price outlook for the next 30 days
+        Create a concise market overview (4-5 sentences) that covers:
         
-        Also provide an overall market overview considering all analyzed stocks.
+        1. Overall market sentiment across these stocks
+        2. Key themes or trends emerging from the news
+        3. Notable developments and their market implications
+        4. Brief risk assessment or opportunities
         
         Focus on:
-        - Recent price movements and volume
-        - News sentiment and key developments
-        - Financial metrics (P/E ratio, market cap)
-        - Risk factors and opportunities
-        - Clear, actionable insights
+        - Connecting individual stock news to broader market themes
+        - Identifying patterns across multiple stocks
+        - Providing clear, actionable insights
+        - Maintaining professional, analytical tone
         
-        Return the analysis in the structured format with individual reports for each ticker.
+        Keep the overview concise but insightful, suitable for quick market assessment.
         """
         
-        # Generate structured output
-        structured_reports = structured_llm.invoke(analysis_prompt)
+        market_overview_response = self.gemini_llm.invoke(market_overview_prompt)
+        market_overview = market_overview_response.content
         
-        dispatch_custom_event("analysis_complete", f"Generated reports for {len(structured_reports.reports)} stocks")
+        # Ensure market_overview is a string
+        if isinstance(market_overview, list):
+            market_overview = " ".join(str(item) for item in market_overview)
+        else:
+            market_overview = str(market_overview)
+        
+        # Convert all_news_stories to a list of dictionaries for the sources
+        sources_list = []
+        for ticker, story in all_news_stories:
+            source_dict = {
+                'ticker': ticker,
+                'title': story.get('title', ''),
+                'url': story.get('url', ''),
+                'source': story.get('source', ''),
+                'domain': story.get('domain', ''),
+                'published_date': story.get('published_date', ''),
+                'score': story.get('score', 0)
+            }
+            sources_list.append(source_dict)
+        
+        # Create the final structured output
+        structured_reports = StockDigestOutput(
+            reports=reports,
+            market_overview=market_overview,
+            generated_at=datetime.now().isoformat(),
+            sources=sources_list
+        )
+        
+        dispatch_custom_event("analysis_complete", f"Generated reports for {len(reports)} stocks")
         
         return {"structured_reports": structured_reports}
 
@@ -222,13 +341,13 @@ class StockDigestAgent:
         graph_builder = StateGraph(State)
         
         # Add nodes
-        graph_builder.add_node("Stock Retrieval", self.stock_retrieval_node)
+        # graph_builder.add_node("Stock Retrieval", self.stock_retrieval_node)
         graph_builder.add_node("Research", self.research_node)
         graph_builder.add_node("Gemini Analysis", self.gemini_analysis_node)
         
         # Define edges
-        graph_builder.add_edge(START, "Stock Retrieval")
-        graph_builder.add_edge("Stock Retrieval", "Research")
+        graph_builder.add_edge(START, "Research")
+        # graph_builder.add_edge("Stock Retrieval", "Research")
         graph_builder.add_edge("Research", "Gemini Analysis")
         graph_builder.add_edge("Gemini Analysis", END)
         

@@ -12,7 +12,7 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite's default port
+    allow_origins=["http://localhost:8080"],  # Vite's default port
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -25,6 +25,7 @@ class StockDigestRequest(BaseModel):
 
 @app.post("/api/stock-digest")
 async def analyze_stocks(request: StockDigestRequest):
+    print("request", request)
     try:
         # Create and initialize the stock digest agent
         agent = StockDigestAgent()
@@ -36,7 +37,8 @@ async def analyze_stocks(request: StockDigestRequest):
         response_data = {
             "reports": {},
             "generated_at": result.generated_at,
-            "market_overview": result.market_overview
+            "market_overview": result.market_overview,
+            "sources": result.sources  # Include the sources field
         }
         
         # Convert each stock report to a dictionary
@@ -44,12 +46,12 @@ async def analyze_stocks(request: StockDigestRequest):
             response_data["reports"][ticker] = {
                 "ticker": report.ticker,
                 "company_name": report.company_name,
-                "executive_summary": report.executive_summary,
+                "stock_market_overview": report.stock_market_overview,
                 "current_performance": report.current_performance,
                 "key_insights": report.key_insights,
                 "recommendation": report.recommendation,
                 "risk_assessment": report.risk_assessment,
-                "price_outlook": report.price_outlook
+                "price_outlook": report.price_outlook,
             }
         
         return response_data
@@ -61,4 +63,4 @@ async def analyze_stocks(request: StockDigestRequest):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -293,4 +293,6 @@ out/
 .temp/
 
 # Local development
-.local/ 
+.local/
+
+.cursorrules

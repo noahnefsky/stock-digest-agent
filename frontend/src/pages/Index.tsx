@@ -4,18 +4,27 @@ import { TickerInput } from '@/components/TickerInput';
 import { DailyDigestReport } from '@/components/DailyDigestReport';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, BarChart3, DollarSign } from 'lucide-react';
+import { StockDigestResponse } from '@/types/stock-digest';
 
 const Index = () => {
   const [tickers, setTickers] = useState<string[]>([]);
+  const [stockDigest, setStockDigest] = useState<StockDigestResponse | null>(null);
   const [showReport, setShowReport] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleGenerateReport = async () => {
     if (tickers.length === 0) return;
-    
+
     setIsGenerating(true);
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const response = await fetch('http://0.0.0.0:3000/api/stock-digest', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ tickers }),
+    });
+    setStockDigest(await response.json());
     setIsGenerating(false);
     setShowReport(true);
   };
@@ -26,7 +35,7 @@ const Index = () => {
   };
 
   if (showReport) {
-    return <DailyDigestReport tickers={tickers} onReset={handleReset} />;
+    return <DailyDigestReport tickers={tickers} onReset={handleReset} stockDigest={stockDigest} />;
   }
 
   return (
