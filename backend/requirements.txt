@@ -12,7 +12,6 @@ langchain-core>=0.3.0
 langchain-google-genai>=2.1.5
 langgraph==0.3.31
 
-
 # Search and research
 tavily-python==0.5.4
 
@@ -21,3 +20,6 @@ python-dotenv==1.0.0
 
 # Type hints
 typing_extensions==4.13.2
+
+# Added from the code block
+polygon-api-client

@@ -1,3 +1,15 @@
+export interface StockFinanceData {
+  ticker: string;
+  current_price: number;
+  previous_close: number;
+  change_percent: number;
+  volume: number;
+  market_cap?: number;
+  pe_ratio?: number;
+  company_name: string;
+  beta?: number;
+}
+
 export interface StockReport {
   ticker: string;
   company_name: string;
@@ -8,6 +20,7 @@ export interface StockReport {
   risk_assessment: string;  // Step 5 from prompt
   price_outlook: string;  // Step 6 from prompt
   sources: Source[];
+  finance_data?: StockFinanceData;
 }
 
 export interface Source {

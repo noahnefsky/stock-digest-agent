@@ -54,7 +54,7 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
   ).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 pb-12">
       <div className="container mx-auto px-4 pt-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-2">
@@ -135,6 +135,68 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
                   </div>
                 </CardHeader>
                 <CardContent className="p-6">
+                  {/* StockFinanceData Section */}
+                  {selectedStock.finance_data && (
+                    <div className="mb-6">
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                        {/* Price and Change */}
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-3 rounded-lg border border-green-100">
+                          <div className="text-xs text-gray-600 font-medium">Current Price</div>
+                          <div className='flex flex-row gap-2 items-center'>
+                            <div className="text-lg font-bold text-gray-900">${selectedStock.finance_data.current_price?.toFixed(2)}</div>
+                            <div className={`text-sm font-medium ${selectedStock.finance_data.change_percent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {selectedStock.finance_data.change_percent >= 0 ? '+' : ''}{selectedStock.finance_data.change_percent?.toFixed(2)}%
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Market Cap */}
+                        {selectedStock.finance_data.market_cap && (
+                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg border border-blue-100">
+                            <div className="text-xs text-gray-600 font-medium">Market Cap</div>
+                            <div className="text-lg font-bold text-gray-900">
+                              {selectedStock.finance_data.market_cap >= 1000000000000 ?
+                                `${(selectedStock.finance_data.market_cap / 1000000000000).toFixed(2)}T` :
+                                selectedStock.finance_data.market_cap >= 1000000000 ?
+                                  `${(selectedStock.finance_data.market_cap / 1000000000).toFixed(2)}B` :
+                                  `${(selectedStock.finance_data.market_cap / 1000000).toFixed(2)}M`
+                              }
+                            </div>
+                          </div>
+                        )}
+
+                        {/* P/E Ratio */}
+                        {selectedStock.finance_data.pe_ratio && (
+                          <div className="bg-gradient-to-r from-purple-50 to-violet-50 p-3 rounded-lg border border-purple-100">
+                            <div className="text-xs text-gray-600 font-medium">P/E Ratio</div>
+                            <div className="text-lg font-bold text-gray-900">{selectedStock.finance_data.pe_ratio.toFixed(2)}</div>
+                          </div>
+                        )}
+
+                        {/* Volume */}
+                        <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-3 rounded-lg border border-orange-100">
+                          <div className="text-xs text-gray-600 font-medium">Volume</div>
+                          <div className="text-lg font-bold text-gray-900">
+                            {selectedStock.finance_data.volume >= 1000000 ?
+                              `${(selectedStock.finance_data.volume / 1000000).toFixed(1)}M` :
+                              selectedStock.finance_data.volume >= 1000 ?
+                                `${(selectedStock.finance_data.volume / 1000).toFixed(0)}K` :
+                                selectedStock.finance_data.volume.toLocaleString()
+                            }
+                          </div>
+                        </div>
+
+                        {/* Beta */}
+                        {selectedStock.finance_data.beta && (
+                          <div className="bg-gradient-to-r from-cyan-50 to-teal-50 p-3 rounded-lg border border-cyan-100">
+                            <div className="text-xs text-gray-600 font-medium">Beta</div>
+                            <div className="text-lg font-bold text-gray-900">{selectedStock.finance_data.beta.toFixed(2)}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Stock Market Overview - Full Width at Top */}
                   <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-lg border border-indigo-100">
                     <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
