@@ -48,7 +48,7 @@ const Index = () => {
             </div>
           </div>
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Daily Digest Generator
+            Daily Stock Digest
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             Get comprehensive market insights and analysis for your favorite stocks. 

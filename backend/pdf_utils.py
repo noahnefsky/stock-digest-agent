@@ -114,9 +114,11 @@ def build_stock_report(story: List, styles: Dict, ticker: str, report, targeted_
     story.append(Spacer(1, 12))
     
     # Summary
-    story.append(Paragraph("Summary", styles['subtitle']))
+    story.append(Paragraph("Research Summary", styles['subtitle']))
     story.append(Paragraph(report.summary, styles['normal']))
     story.append(Spacer(1, 12))
+    
+
     
     # Financial Data
     if report.finance_data:

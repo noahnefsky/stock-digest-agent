@@ -13,7 +13,7 @@ export interface StockFinanceData {
 export interface StockReport {
   ticker: string;
   company_name: string;
-  summary: string;  // Step 1 from prompt: summary of most important insights
+  summary?: string;  // 4-6 sentence summary of Tavily research
   current_performance: string;  // Step 2 from prompt
   key_insights: string[];  // Step 3 from prompt
   recommendation: string;  // Step 4 from prompt

@@ -43,7 +43,7 @@ class TargetedResearch(BaseModel):
 class StockReport(BaseModel):
     ticker: str
     company_name: str
-    summary: str
+    summary: OptionalType[str] = None
     current_performance: str
     key_insights: List[str] = Field(default_factory=list)
     recommendation: str

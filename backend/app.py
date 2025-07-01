@@ -60,6 +60,7 @@ async def analyze_stocks(request: StockDigestRequest):
                 "price_outlook": report.price_outlook,
                 "sources": report.sources,
                 "finance_data": report.finance_data.model_dump() if report.finance_data else None,
+
             }
         
         # Add PDF data if available

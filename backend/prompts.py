@@ -36,12 +36,11 @@ def get_stock_analysis_prompt(ticker: str, research_data: dict | object, ticker_
     Current date: {current_date}
     
     Create a portfolio-focused report with the following fields:
-    1. summary: In 4-5 sentences, summarize the most important details from the research data for this stock along with other important market details.
-    2. current_performance: 2-3 sentences on recent price action and key metrics
-    3. key_insights: List of 4-6 actionable items from the latest news (past 24 h). Focus on specific events, earnings, analyst actions or significant changes with the market or business
-    4. recommendation: Investment recommendation (Buy/Hold/Sell with brief reasoning)
-    5. risk_assessment: 2-3 sentences identifying key risks from news
-    6. price_outlook: 1-2 sentences on near-term expectations
+    1. current_performance: 2-3 sentences on recent price action and key metrics
+    2. key_insights: List of 4-6 actionable items from the latest news (past 24 h). Focus on specific events, earnings, analyst actions or significant changes with the market or business
+    3. recommendation: Investment recommendation (Buy/Hold/Sell with brief reasoning)
+    4. risk_assessment: 2-3 sentences identifying key risks from news
+    5. price_outlook: 1-2 sentences on near-term expectations
 
     **Key-Insights formatting rules**  
     • Return as separate bullet strings.  
