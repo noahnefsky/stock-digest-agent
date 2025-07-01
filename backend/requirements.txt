@@ -15,6 +15,9 @@ langgraph==0.3.31
 # Search and research
 tavily-python==0.5.4
 
+# MCP (Model Context Protocol) integration
+mcp-use>=1.2.7
+
 # Environment and utilities
 python-dotenv==1.0.0
 

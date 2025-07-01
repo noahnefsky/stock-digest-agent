@@ -6,7 +6,7 @@ A comprehensive stock analysis and digest generation system that provides detail
 
 ### Core Functionality
 - **Real-time Financial Data**: Fetch current prices, volume, market cap, and P/E ratios from Polygon.io
-- **Comprehensive Research**: Gather news and analysis from multiple financial sources using Tavily
+- **Comprehensive Research**: Gather news and analysis from multiple financial sources using Tavily via MCP (Model Context Protocol)
 - **AI-Powered Analysis**: Generate insights using Google's Gemini AI model
 - **Targeted Research**: Perform comprehensive searches for earnings, analyst ratings, insider trading, technical analysis, and sector news
 - **PDF Export**: Generate and download comprehensive PDF reports with professional formatting
@@ -49,7 +49,7 @@ stock-digest-agent/
 The system uses LangGraph to orchestrate a multi-step workflow:
 
 1. **PolygonFinance Node**: Fetch financial data from Polygon.io with rate limiting (8-second delays)
-2. **TargetedResearch Node**: Perform comprehensive keyword searches for each ticker using Tavily
+2. **TargetedResearch Node**: Perform comprehensive keyword searches for each ticker using Tavily via MCP
 3. **GeminiAnalysis Node**: AI-powered report generation with structured output
 4. **PDFGeneration Node**: Create downloadable PDF reports using ReportLab
 
@@ -65,6 +65,7 @@ The system uses LangGraph to orchestrate a multi-step workflow:
 - **Error Handling**: Graceful fallbacks for missing data
 - **Structured Output**: Uses Pydantic models for consistent data structure
 - **Real-time Progress**: Custom event dispatching for frontend updates
+- **MCP Integration**: Uses Model Context Protocol for Tavily search integration
 
 ## Frontend Features
 
@@ -103,6 +104,18 @@ TAVILY_API_KEY=your_tavily_api_key
 VITE_BACKEND_URL=your_backend_url
 POLYGON_API_KEY=your_polygon_api_key
 BACKEND_PORT=3000
+```
+
+### MCP (Model Context Protocol) Setup
+The system uses MCP to integrate with Tavily search. The MCP server is automatically configured to use:
+- **Tavily MCP Server**: `npx -y tavily-mcp@0.1.3`
+- **API Key**: Uses `TAVILY_API_KEY` from environment variables
+- **Max Steps**: 30 steps per search query
+
+To test the MCP integration:
+```bash
+cd backend
+python test_mcp.py
 ```
 
 ## API Endpoints
@@ -165,7 +178,7 @@ Generate a complete stock digest for multiple tickers.
 
 ### Rate Limiting
 - Polygon.io: 8-second delays between requests for free tier compliance
-- Tavily: 2-second delays between searches
+- Tavily (via MCP): 2-second delays between searches
 - Optimized to stay within API limits while maintaining performance
 
 ### PDF Generation
