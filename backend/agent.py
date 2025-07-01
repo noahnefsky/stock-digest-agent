@@ -12,9 +12,12 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 from mcp_use import MCPAgent, MCPClient
-from tavily import TavilyClient
 from typing_extensions import TypedDict
 from polygon import RESTClient
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_tavily import TavilySearch
+from langchain_core.prompts import PromptTemplate
 
 from prompts import get_stock_analysis_prompt, get_market_overview_prompt
 from pdf_utils import generate_pdf
@@ -38,7 +41,38 @@ class StockDigestAgent:
             google_api_key=os.getenv("GOOGLE_API_KEY")
         )
         
-        # Initialize MCP client for Tavily
+        # Initialize React agent for Tavily search
+        self.react_tools = [
+            TavilySearch(
+                max_results=10,
+                include_raw_content=True,
+                search_depth="advanced",
+                api_key=os.getenv("TAVILY_API_KEY")
+            )
+        ]
+        
+        self.react_prompt = PromptTemplate.from_template("""You are a helpful AI assistant that searches for information using the available tools.
+
+When given a search query, you should:
+1. Use the available search tools to find relevant information
+2. Return the search results in a structured format
+3. Focus on recent and relevant information
+4. Provide clear, concise summaries
+
+Available tools: {tools}
+Tool names: {tool_names}
+
+Question: {input}
+{agent_scratchpad}""")
+        
+        self.react_agent = create_react_agent(
+            self.gemini_llm, self.react_tools, self.react_prompt
+        )
+        self.react_agent_executor = AgentExecutor(
+            agent=self.react_agent, tools=self.react_tools, handle_parsing_errors=True
+        )
+        
+        # Initialize MCP client for Tavily (keeping as backup)
         self.mcp_config = {
             "mcpServers": {
                 "tavily-mcp": {
@@ -53,9 +87,6 @@ class StockDigestAgent:
         
         self.mcp_client = MCPClient.from_dict(self.mcp_config)
         self.mcp_agent = MCPAgent(llm=self.gemini_llm, client=self.mcp_client, max_steps=30)
-        
-        # Fallback: Direct Tavily client for when MCP fails
-        self.tavily_client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
         
         self.polygon_client = RESTClient(os.getenv("POLYGON_API_KEY"))
         self.current_date = datetime.now().strftime("%Y-%m-%d")
@@ -138,9 +169,9 @@ class StockDigestAgent:
             
         return {"finance_data": finance_data}
 
-    async def targeted_research_node(self, state: State) -> Dict:
-        """Perform targeted research for each ticker using MCP Tavily agent"""
-        dispatch_custom_event("targeted_research_status", "Performing comprehensive research for each ticker using MCP...")
+    def targeted_research_node(self, state: State) -> Dict:
+        """Perform targeted research for each ticker using React agent with Tavily search"""
+        dispatch_custom_event("targeted_research_status", "Performing comprehensive research for each ticker using React agent...")
         
         tickers = state["tickers"]
         targeted_research = {}
@@ -148,29 +179,70 @@ class StockDigestAgent:
         for ticker in tickers:
             dispatch_custom_event("targeted_research_ticker", f"Researching {ticker}")
             
-            # Optimized search categories for recent news
-            search_categories = [
-                f"{ticker} earnings quarterly results revenue profit guidance",
-                f"{ticker} analyst ratings price targets upgrades downgrades",
-                f"{ticker} insider trading SEC filings executive transactions",
-                f"{ticker} technical analysis support resistance chart patterns",
-                f"{ticker} sector news industry trends competitor analysis",
-                f"{ticker} stock price movement trading volume market cap",
-                f"{ticker} company news announcements press releases",
-                f"{ticker} market sentiment investor confidence"
-            ]
+            # Comprehensive search query covering all important categories with past week filter
+            search_query = f"Find recent news about {ticker} stock from the past week including earnings reports, analyst ratings, insider trading, technical analysis, and sector news. Return the search results with titles, URLs, and content."
+            
+            # Use React agent to perform the search
+            search_result = self.react_agent_executor.invoke({"input": search_query})
+            
+            # Parse the search results from the React agent response
+            search_results = self._parse_react_search_results(search_result)
             
             all_stories = []
-            
-            # Efficient search with minimal delays
-            for i, search_query in enumerate(search_categories):
-                api_results = self._search_with_tavily_api(ticker, search_query)
-                all_stories.extend(api_results)
-                time.sleep(0.5)  # Reduced delay for faster processing
+            for r in search_results.get('results', []):
+                if isinstance(r, dict):
+                    story = {
+                        'title': r.get('title', r.get('name', '')),
+                        'content': r.get('content', r.get('snippet', ''))[:400],
+                        'url': r.get('url', r.get('link', '')),
+                        'published_date': r.get('published_date', r.get('date', '')),
+                        'source': r.get('source', r.get('domain', '')),
+                        'score': r.get('score', 0),
+                        'domain': r.get('domain', ''),
+                        'keyword': 'comprehensive'
+                    }
+                    all_stories.append(story)
+                elif isinstance(r, str):
+                    # Handle string results
+                    all_stories.append({
+                        'title': 'Search Result',
+                        'content': r[:400],
+                        'url': '',
+                        'published_date': '',
+                        'source': '',
+                        'score': 0,
+                        'domain': '',
+                        'keyword': 'comprehensive'
+                    })
             
             # Limit to top 10 sources per ticker by score
             all_stories.sort(key=lambda x: x.get('score', 0), reverse=True)
             all_stories = all_stories[:10]
+            
+            # If no real stories found, try a simpler search
+            if not all_stories or all(all_story.get('title') == 'Search Result' for all_story in all_stories):
+                logger.warning(f"No real stories found for {ticker}, trying simpler search")
+                simple_search_query = f"Find recent news about {ticker} stock from the past week"
+                simple_result = self.react_agent_executor.invoke({"input": simple_search_query})
+                simple_results = self._parse_react_search_results(simple_result)
+                
+                for r in simple_results.get('results', []):
+                    if isinstance(r, dict) and r.get('title') and r.get('title') != 'Search Result':
+                        story = {
+                            'title': r.get('title', ''),
+                            'content': r.get('content', r.get('snippet', ''))[:400],
+                            'url': r.get('url', r.get('link', '')),
+                            'published_date': r.get('published_date', r.get('date', '')),
+                            'source': r.get('source', r.get('domain', '')),
+                            'score': r.get('score', 0),
+                            'domain': r.get('domain', ''),
+                            'keyword': 'simple_fallback'
+                        }
+                        all_stories.append(story)
+                
+                # Re-sort and limit
+                all_stories.sort(key=lambda x: x.get('score', 0), reverse=True)
+                all_stories = all_stories[:10]
             
             # Categorize stories based on content keywords
             categorized_stories = {
@@ -214,9 +286,55 @@ class StockDigestAgent:
         
         return {"targeted_research": targeted_research}
 
+    def _parse_react_search_results(self, react_result):
+        """Parse search results from React agent response"""
+        logger.info(f"React result type: {type(react_result)}, content: {str(react_result)[:500]}...")
+        
+        # React agent returns a dict with 'output' key
+        if isinstance(react_result, dict) and 'output' in react_result:
+            output = react_result['output']
+            
+            # If output is a string, try to parse it
+            if isinstance(output, str):
+                # Try to extract structured data from the text
+                lines = output.split('\n')
+                results = []
+                current_result = {}
+                
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('Title:') or line.startswith('title:'):
+                        if current_result:
+                            results.append(current_result)
+                        current_result = {'title': line.split(':', 1)[1].strip()}
+                    elif line.startswith('URL:') or line.startswith('url:'):
+                        current_result['url'] = line.split(':', 1)[1].strip()
+                    elif line.startswith('Content:') or line.startswith('content:'):
+                        current_result['content'] = line.split(':', 1)[1].strip()
+                    elif line.startswith('Source:') or line.startswith('source:'):
+                        current_result['source'] = line.split(':', 1)[1].strip()
+                
+                if current_result:
+                    results.append(current_result)
+                
+                if results:
+                    return {"results": results}
+                
+                # If no structured data found, treat as a single result
+                return {"results": [{"content": output, "title": "Search Result"}]}
+            
+            # If output is already a list or dict, return as is
+            elif isinstance(output, list):
+                return {"results": output}
+            elif isinstance(output, dict):
+                return output if "results" in output else {"results": [output]}
+        
+        # Fallback to empty results
+        return {"results": []}
+
     def _parse_mcp_search_results(self, mcp_result):
         """Parse search results from MCP agent response"""
-        logger.info(f"MCP result type: {type(mcp_result)}, content: {str(mcp_result)[:200]}...")
+        logger.info(f"MCP result type: {type(mcp_result)}, content: {str(mcp_result)[:500]}...")
         
         # Handle different response formats from MCP
         if isinstance(mcp_result, dict):
@@ -263,6 +381,11 @@ class StockDigestAgent:
                     if results:
                         return {"results": results}
                 
+                # Check if the response indicates no results or error
+                if "unavailability" in mcp_result.lower() or "no recent" in mcp_result.lower() or "impossible" in mcp_result.lower():
+                    logger.warning(f"MCP returned error response for search: {mcp_result[:200]}...")
+                    return {"results": []}
+                
                 # If no structured data found, treat as a single result
                 return {"results": [{"content": mcp_result, "title": "Search Result"}]}
         elif isinstance(mcp_result, list):
@@ -271,34 +394,7 @@ class StockDigestAgent:
             # Fallback to empty results
             return {"results": []}
 
-    def _search_with_tavily_api(self, ticker: str, search_query: str) -> List[Dict]:
-        """Primary method to search using direct Tavily API"""
-        search_results = self.tavily_client.search(
-            query=search_query,
-            search_depth="basic",
-            max_results=5,
-            include_raw_content=True,
-            include_answer=True,
-            include_domains=["reuters.com", "bloomberg.com", "cnbc.com", "marketwatch.com", "yahoo.com", "seekingalpha.com"],
-            time_period="1d"  # Last 1 day for maximum freshness
-        )
-        
-        stories = []
-        for r in search_results.get('results', []):
-            story = {
-                'title': r.get('title', ''),
-                'content': r.get('content', '')[:400],
-                'url': r.get('url', ''),
-                'published_date': r.get('published_date', ''),
-                'source': r.get('source', ''),
-                'score': r.get('score', 0),
-                'domain': r.get('domain', ''),
-                'keyword': 'tavily_direct'
-            }
-            stories.append(story)
-        
-        logger.info(f"Tavily API returned {len(stories)} stories for {ticker}")
-        return stories
+
 
     def gemini_analysis_node(self, state: State) -> Dict:
         """Analyze data with Gemini and generate structured reports"""
@@ -380,12 +476,12 @@ class StockDigestAgent:
         
         return graph_builder.compile()
 
-    async def run_digest(self, tickers: List[str]) -> StockDigestOutput:
+    def run_digest(self, tickers: List[str]) -> StockDigestOutput:
         """Run the complete stock digest workflow"""
         logger.info(f"Starting stock digest for tickers: {tickers}")
         
         graph = self.build_graph()
         initial_state = {"tickers": tickers, "date": self.current_date}
         
-        final_state = await graph.ainvoke(initial_state)
+        final_state = graph.invoke(initial_state)
         return final_state["structured_reports"]

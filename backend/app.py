@@ -30,15 +30,8 @@ async def analyze_stocks(request: StockDigestRequest):
         # Create and initialize the stock digest agent
         agent = StockDigestAgent()
 
-        # Run the stock digest workflow
-        graph = agent.build_graph()
-        initial_state = {"tickers": request.tickers, "date": agent.current_date}
-        
-        final_state = await graph.ainvoke(initial_state)
-        
-        # Get both structured reports and PDF data
-        result = final_state["structured_reports"]
-        pdf_data = final_state.get("pdf_data")
+        # Run the stock digest workflow using the synchronous method
+        result = agent.run_digest(request.tickers)
         
         # Convert the result to a dictionary for JSON serialization
         response_data = {
@@ -60,13 +53,6 @@ async def analyze_stocks(request: StockDigestRequest):
                 "price_outlook": report.price_outlook,
                 "sources": report.sources,
                 "finance_data": report.finance_data.model_dump() if report.finance_data else None,
-            }
-        
-        # Add PDF data if available
-        if pdf_data:
-            response_data["pdf_data"] = {
-                "pdf_base64": pdf_data.pdf_base64,
-                "filename": pdf_data.filename
             }
         
         return response_data
