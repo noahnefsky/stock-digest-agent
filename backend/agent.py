@@ -148,73 +148,29 @@ class StockDigestAgent:
         for ticker in tickers:
             dispatch_custom_event("targeted_research_ticker", f"Researching {ticker}")
             
-            # Perform multiple targeted searches for different categories
+            # Optimized search categories for recent news
             search_categories = [
-                f"{ticker} earnings quarterly results",
-                f"{ticker} analyst ratings upgrades downgrades",
-                f"{ticker} insider trading SEC filings",
-                f"{ticker} technical analysis chart patterns",
-                f"{ticker} sector news industry trends",
-                f"{ticker} stock price volume market cap",
-                f"{ticker} company news announcements",
-                f"{ticker} market sentiment investor confidence",
-                f"{ticker} competitive analysis market share",
-                f"{ticker} regulatory compliance legal"
+                f"{ticker} earnings quarterly results revenue profit guidance",
+                f"{ticker} analyst ratings price targets upgrades downgrades",
+                f"{ticker} insider trading SEC filings executive transactions",
+                f"{ticker} technical analysis support resistance chart patterns",
+                f"{ticker} sector news industry trends competitor analysis",
+                f"{ticker} stock price movement trading volume market cap",
+                f"{ticker} company news announcements press releases",
+                f"{ticker} market sentiment investor confidence"
             ]
             
             all_stories = []
             
+            # Efficient search with minimal delays
             for i, search_query in enumerate(search_categories):
-                try:
-                    # Use the MCP agent to perform the search
-                    search_result = await self.mcp_agent.run(search_query)
-                    
-                    # Log the raw MCP result for debugging
-                    logger.info(f"MCP raw result for {ticker} category {i+1}: {type(search_result)} - {str(search_result)[:200]}...")
-                    
-                    # Parse the search results from the MCP agent response
-                    search_results = self._parse_mcp_search_results(search_result)
-                    
-                    # Process stories from this search
-                    logger.info(f"Processing {len(search_results.get('results', []))} results for {ticker} category {i+1}")
-                    for r in search_results.get('results', []):
-                        logger.info(f"  Raw result: {type(r)} - {str(r)[:100]}...")
-                        if isinstance(r, dict):
-                            story = {
-                                'title': r.get('title', r.get('name', '')),
-                                'content': r.get('content', r.get('snippet', ''))[:400],
-                                'url': r.get('url', r.get('link', '')),
-                                'published_date': r.get('published_date', r.get('date', '')),
-                                'source': r.get('source', r.get('domain', '')),
-                                'score': r.get('score', 0),
-                                'domain': r.get('domain', ''),
-                                'keyword': f'category_{i+1}'
-                            }
-                            logger.info(f"  Processed story: {story.get('title', 'No title')} - {story.get('url', 'No URL')}")
-                            all_stories.append(story)
-                        elif isinstance(r, str):
-                            # Handle string results
-                            story = {
-                                'title': 'Search Result',
-                                'content': r[:400],
-                                'url': '',
-                                'published_date': '',
-                                'source': '',
-                                'score': 0,
-                                'domain': '',
-                                'keyword': f'category_{i+1}'
-                            }
-                            logger.info(f"  String result processed: {story['content'][:50]}...")
-                            all_stories.append(story)
-                    
-                    time.sleep(1)  # Brief delay between searches
-                    
-                except Exception as e:
-                    logger.error(f"Error in MCP search for {ticker} category {i+1}: {str(e)}")
-                    # Fallback to direct Tavily API
-                    logger.info(f"Falling back to direct Tavily API for {ticker} category {i+1}")
-                    fallback_results = self._search_with_tavily_api(ticker, search_query)
-                    all_stories.extend(fallback_results)
+                api_results = self._search_with_tavily_api(ticker, search_query)
+                all_stories.extend(api_results)
+                time.sleep(0.5)  # Reduced delay for faster processing
+            
+            # Limit to top 10 sources per ticker by score
+            all_stories.sort(key=lambda x: x.get('score', 0), reverse=True)
+            all_stories = all_stories[:10]
             
             # Categorize stories based on content keywords
             categorized_stories = {
@@ -231,27 +187,21 @@ class StockDigestAgent:
             technical_keywords = ["technical", "support", "resistance", "RSI", "MACD", "chart"]
             sector_keywords = ["sector", "industry", "competitor", "market share", "regulatory"]
             
-            logger.info(f"Categorizing {len(all_stories)} stories for {ticker}")
+            # Efficient categorization
             for story in all_stories:
                 content_lower = story['content'].lower() + ' ' + story['title'].lower()
-                logger.info(f"  Categorizing story: {story.get('title', 'No title')}")
                 
                 # Categorize based on content
                 if any(keyword in content_lower for keyword in earnings_keywords):
                     categorized_stories["earnings_news"].append(story)
-                    logger.info(f"    -> earnings_news")
                 elif any(keyword in content_lower for keyword in analyst_keywords):
                     categorized_stories["analyst_ratings"].append(story)
-                    logger.info(f"    -> analyst_ratings")
                 elif any(keyword in content_lower for keyword in insider_keywords):
                     categorized_stories["insider_trading"].append(story)
-                    logger.info(f"    -> insider_trading")
                 elif any(keyword in content_lower for keyword in technical_keywords):
                     categorized_stories["technical_analysis"].append(story)
-                    logger.info(f"    -> technical_analysis")
                 else:
                     categorized_stories["sector_news"].append(story)
-                    logger.info(f"    -> sector_news")
             
             ticker_research = {
                 "ticker": ticker,
@@ -259,12 +209,8 @@ class StockDigestAgent:
             }
             
             targeted_research[ticker] = TargetedResearch(**ticker_research)
-            logger.info(f"MCP research completed for {ticker} with {len(all_stories)} total stories")
-            logger.info(f"  Categorized: {sum(len(cat) for cat in categorized_stories.values())} stories")
-            for category, cat_stories in categorized_stories.items():
-                if cat_stories:
-                    logger.info(f"    {category}: {len(cat_stories)} stories")
-            time.sleep(2)
+            logger.info(f"Research completed for {ticker}: {len(all_stories)} stories, {sum(len(cat) for cat in categorized_stories.values())} categorized")
+            time.sleep(1)  # Reduced delay
         
         return {"targeted_research": targeted_research}
 
@@ -326,37 +272,33 @@ class StockDigestAgent:
             return {"results": []}
 
     def _search_with_tavily_api(self, ticker: str, search_query: str) -> List[Dict]:
-        """Fallback method to search using direct Tavily API"""
-        try:
-            search_results = self.tavily_client.search(
-                query=search_query,
-                search_depth="basic",
-                max_results=5,
-                include_raw_content=True,
-                include_answer=True,
-                include_domains=["reuters.com", "bloomberg.com", "cnbc.com", "marketwatch.com", "yahoo.com", "seekingalpha.com"]
-            )
-            
-            stories = []
-            for r in search_results.get('results', []):
-                story = {
-                    'title': r.get('title', ''),
-                    'content': r.get('content', '')[:400],
-                    'url': r.get('url', ''),
-                    'published_date': r.get('published_date', ''),
-                    'source': r.get('source', ''),
-                    'score': r.get('score', 0),
-                    'domain': r.get('domain', ''),
-                    'keyword': 'tavily_fallback'
-                }
-                stories.append(story)
-            
-            logger.info(f"Tavily API fallback returned {len(stories)} stories for {ticker}")
-            return stories
-            
-        except Exception as e:
-            logger.error(f"Tavily API fallback also failed for {ticker}: {str(e)}")
-            return []
+        """Primary method to search using direct Tavily API"""
+        search_results = self.tavily_client.search(
+            query=search_query,
+            search_depth="basic",
+            max_results=5,
+            include_raw_content=True,
+            include_answer=True,
+            include_domains=["reuters.com", "bloomberg.com", "cnbc.com", "marketwatch.com", "yahoo.com", "seekingalpha.com"],
+            time_period="1d"  # Last 1 day for maximum freshness
+        )
+        
+        stories = []
+        for r in search_results.get('results', []):
+            story = {
+                'title': r.get('title', ''),
+                'content': r.get('content', '')[:400],
+                'url': r.get('url', ''),
+                'published_date': r.get('published_date', ''),
+                'source': r.get('source', ''),
+                'score': r.get('score', 0),
+                'domain': r.get('domain', ''),
+                'keyword': 'tavily_direct'
+            }
+            stories.append(story)
+        
+        logger.info(f"Tavily API returned {len(stories)} stories for {ticker}")
+        return stories
 
     def gemini_analysis_node(self, state: State) -> Dict:
         """Analyze data with Gemini and generate structured reports"""
@@ -371,16 +313,12 @@ class StockDigestAgent:
         for ticker in tickers:
             if ticker in targeted_research:
                 research = targeted_research[ticker]
-                logger.info(f"Processing research for {ticker}: {research.model_dump().keys()}")
                 for category, stories in research.model_dump().items():
                     if category != 'ticker' and stories:
-                        logger.info(f"  Category {category}: {len(stories)} stories")
                         for story in stories:
                             story_with_ticker = story.copy()
                             story_with_ticker['ticker'] = ticker
                             all_news_stories.append((ticker, story_with_ticker))
-        
-        logger.info(f"Total stories collected: {len(all_news_stories)}")
         
         reports = {}
         for ticker in tickers:
@@ -395,12 +333,6 @@ class StockDigestAgent:
             report_dict = dict(report)
             report_dict['sources'] = ticker_stories
             report_dict['finance_data'] = finance
-            
-            # Log the sources being added to the report
-            logger.info(f"Adding {len(ticker_stories)} sources to {ticker} report")
-            for i, source in enumerate(ticker_stories[:3]):  # Log first 3 sources
-                logger.info(f"  Source {i+1}: {source.get('title', 'No title')} - {source.get('url', 'No URL')}")
-            
             reports[ticker] = StockReport(**report_dict)
         
         # Generate market overview from all the targeted research data

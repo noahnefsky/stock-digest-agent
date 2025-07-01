@@ -360,12 +360,12 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-2">
-                                      <Badge variant="outline" className="text-xs">
+                                      {/* <Badge variant="outline" className="text-xs">
                                         {source.ticker}
-                                      </Badge>
-                                      <Badge variant="secondary" className="text-xs">
+                                      </Badge> */}
+                                      {/* <Badge variant="secondary" className="text-xs">
                                         Score: {source.score.toFixed(1)}
-                                      </Badge>
+                                      </Badge> */}
                                       <span className="text-xs text-gray-500">
                                         {source.published_date}
                                       </span>
