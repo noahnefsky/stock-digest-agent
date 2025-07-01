@@ -23,3 +23,6 @@ typing_extensions==4.13.2
 
 # Added from the code block
 polygon-api-client
+
+# PDF generation
+reportlab==4.0.7

@@ -12,7 +12,7 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080"],  # Vite's default port
+    allow_origins=["http://localhost:8080"],  # The port we fixed in the vite.config.ts file
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,7 +31,14 @@ async def analyze_stocks(request: StockDigestRequest):
         agent = StockDigestAgent()
 
         # Run the stock digest workflow
-        result = await agent.run_digest(request.tickers)
+        graph = agent.build_graph()
+        initial_state = {"tickers": request.tickers, "date": agent.current_date}
+        
+        final_state = await graph.ainvoke(initial_state)
+        
+        # Get both structured reports and PDF data
+        result = final_state["structured_reports"]
+        pdf_data = final_state.get("pdf_data")
         
         # Convert the result to a dictionary for JSON serialization
         response_data = {
@@ -55,6 +62,13 @@ async def analyze_stocks(request: StockDigestRequest):
                 "finance_data": report.finance_data.model_dump() if report.finance_data else None,
             }
         
+        # Add PDF data if available
+        if pdf_data:
+            response_data["pdf_data"] = {
+                "pdf_base64": pdf_data.pdf_base64,
+                "filename": pdf_data.filename
+            }
+        
         return response_data
 
     except Exception as e:
@@ -63,5 +77,9 @@ async def analyze_stocks(request: StockDigestRequest):
 
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import os
+    from dotenv import load_dotenv
+    
+    load_dotenv()
+    port = int(os.getenv("BACKEND_PORT", 3000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

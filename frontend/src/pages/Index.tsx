@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { TickerInput } from '@/components/TickerInput';
 import { DailyDigestReport } from '@/components/DailyDigestReport';
@@ -17,7 +16,7 @@ const Index = () => {
 
     setIsGenerating(true);
 
-    const response = await fetch('http://0.0.0.0:3000/api/stock-digest', {
+    const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/stock-digest`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

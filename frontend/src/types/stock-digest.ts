@@ -33,10 +33,16 @@ export interface Source {
   score: number;
 }
 
+export interface PDFData {
+  pdf_base64: string;
+  filename: string;
+}
+
 export interface StockDigestResponse {
   reports: Record<string, StockReport>;
   generated_at: string;
   market_overview: string;
+  pdf_data?: PDFData;
 }
 
 export interface StockDigestRequest {

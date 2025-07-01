@@ -53,6 +53,29 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
     !stock.recommendation.toLowerCase().includes('sell')
   ).length;
 
+  const downloadPDF = () => {
+    if (stockDigest.pdf_data) {
+      // Convert base64 to blob
+      const byteCharacters = atob(stockDigest.pdf_data.pdf_base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = stockDigest.pdf_data.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 pb-12">
       <div className="container mx-auto px-4 pt-8">
@@ -74,9 +97,14 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
               Portfolio Update Report
             </h1>
           </div>
-          <Button variant="outline" className="flex items-center gap-2 hover:bg-white/80">
+          <Button 
+            variant="outline" 
+            className="flex items-center gap-2 hover:bg-white/80"
+            onClick={downloadPDF}
+            disabled={!stockDigest.pdf_data}
+          >
             <Download className="h-4 w-4" />
-            Export Report
+            Export PDF
           </Button>
         </div>
 
