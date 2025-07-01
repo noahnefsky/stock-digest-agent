@@ -8,6 +8,7 @@ pydantic-settings==2.9.1
 yfinance==0.2.28
 
 # AI and language models
+langchain>=0.0.300
 langchain-core>=0.3.0
 langchain-google-genai>=2.1.5
 langgraph==0.3.31
@@ -21,8 +22,8 @@ python-dotenv==1.0.0
 # Type hints
 typing_extensions==4.13.2
 
-# Added from the code block
-polygon-api-client
+# Polygon client
+polygon-api-client>=1.4.0
 
 # PDF generation
 reportlab==4.0.7

@@ -1,30 +1,28 @@
-import json
 import logging
 import os
-from datetime import datetime, timedelta
-from typing import Dict, List
-from typing import Optional as OptionalType
 import time
+from datetime import datetime
+from typing import Dict, List
 
 from dotenv import load_dotenv
 from langchain_core.callbacks.manager import dispatch_custom_event
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.chains.summarize import load_summarize_chain
+from langchain_core.prompts import PromptTemplate
+from langchain_core.documents import Document
 from langgraph.graph import END, START, StateGraph
-from pydantic import BaseModel, Field
 from tavily import TavilyClient
-from typing_extensions import TypedDict
 from polygon import RESTClient
 
-from prompts import get_stock_analysis_prompt, get_market_overview_prompt
+from prompts import get_stock_analysis_prompt, get_market_overview_summary_prompt
 from pdf_utils import generate_pdf
 from models import (
-    StockFinanceData, StockResearch, TargetedResearch, StockReport, 
+    StockFinanceData, TargetedResearch, StockReport,
     StockDigestOutput, PDFData, State
 )
 
 load_dotenv()
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -39,245 +37,291 @@ class StockDigestAgent:
         self.tavily_client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
         self.polygon_client = RESTClient(os.getenv("POLYGON_API_KEY"))
         self.current_date = datetime.now().strftime("%Y-%m-%d")
+        self._cache = {}
+        self._cache_ttl = 300  # seconds
+
+    # ---------------------------- Caching Utilities ---------------------------- #
+
+    def _get_cache_key(self, prefix: str, key: str) -> str:
+        return f"{prefix}:{key}:{self.current_date}"
+
+    def _get_cached(self, cache_key: str):
+        if cache_key not in self._cache:
+            return None
+        timestamp, value = self._cache[cache_key]
+        if time.time() - timestamp < self._cache_ttl:
+            return value
+        del self._cache[cache_key]
+        return None
+
+    def _set_cached(self, cache_key: str, value):
+        self._cache[cache_key] = (time.time(), value)
+
+    # ---------------------------- Polygon Finance Node ---------------------------- #
+
+    def _fetch_ticker_data(self, ticker: str) -> tuple[str, StockFinanceData]:
+        """Fetch financial data for a single ticker."""
+        cache_key = self._get_cache_key("finance", ticker)
+        cached = self._get_cached(cache_key)
+        if cached:
+            logger.info(f"Using cached data for {ticker}")
+            return ticker, cached
+
+        try:
+            details = self.polygon_client.get_ticker_details(ticker)
+            prev_day = self.polygon_client.get_previous_close_agg(ticker)
+        except Exception as e:
+            logger.warning(f"Error fetching data for {ticker}: {e}")
+            # Return default data structure on error
+            details = type('obj', (object,), {'name': ticker, 'market_cap': None, 'pe_ratio': None})()
+            prev_day = []
+
+        current_price = previous_close = 0.0
+        volume = 0
+        if isinstance(prev_day, list) and prev_day:
+            bar = prev_day[0]
+            current_price = float(getattr(bar, 'close', 0) or 0)
+            previous_close = current_price
+            volume = int(getattr(bar, 'volume', 0) or 0)
+
+        company_name = getattr(details, 'name', ticker)
+        market_cap = float(getattr(details, 'market_cap', 0) or 0) or None
+        pe_ratio = float(getattr(details, 'pe_ratio', 0) or 0) or None
+
+        finance_data = StockFinanceData(
+            ticker=ticker,
+            current_price=current_price,
+            previous_close=previous_close,
+            change_percent=0.0,
+            volume=volume,
+            market_cap=market_cap,
+            pe_ratio=pe_ratio,
+            company_name=company_name,
+            beta=None
+        )
+        self._set_cached(cache_key, finance_data)
+        logger.info(f"Retrieved data for {ticker} from Polygon.io")
+        return ticker, finance_data
 
     def polygon_finance_node(self, state: State) -> Dict:
-        """Retrieve stock data from Polygon.io"""
         dispatch_custom_event("finance_status", "Fetching financial data from Polygon.io...")
-        
         tickers = state["tickers"]
         finance_data = {}
-        
-        for ticker in tickers:
-            dispatch_custom_event("finance_ticker", f"Processing {ticker}")
-            
-            # Get ticker details for company info
-            details = self.polygon_client.get_ticker_details(ticker)
-            
-            # Get last two daily bars for price comparison
-            to_date = datetime.now().date()
-            from_date = to_date - timedelta(days=7)
-            
-            aggs = self.polygon_client.get_aggs(
-                ticker, 1, "day", from_date.strftime("%Y-%m-%d"), to_date.strftime("%Y-%m-%d")
-            )
-            
-            # Initialize default values
-            current_price = 0.0
-            previous_close = 0.0
-            change_percent = 0.0
-            volume = 0
-            market_cap = None
-            pe_ratio = None
-            company_name = ticker
-            
-            # Handle aggregates data
-            if isinstance(aggs, list) and len(aggs) >= 2:
-                latest_bar = aggs[-1]
-                previous_bar = aggs[-2]
-                
-                current_price = float(getattr(latest_bar, 'close', 0) or 0)
-                previous_close = float(getattr(previous_bar, 'close', 0) or 0)
-                
-                if previous_close > 0:
-                    change_percent = ((current_price - previous_close) / previous_close) * 100
-                
-                volume = int(getattr(latest_bar, 'volume', 0) or 0)
-            else:
-                # Fallback to previous close
-                prev_day = self.polygon_client.get_previous_close_agg(ticker)
-                if isinstance(prev_day, list) and len(prev_day) > 0:
-                    prev_bar = prev_day[0]
-                    current_price = float(getattr(prev_bar, 'close', 0) or 0)
-                    previous_close = current_price
-                    volume = int(getattr(prev_bar, 'volume', 0) or 0)
-            
-            # Handle ticker details
-            if hasattr(details, 'name') and getattr(details, 'name', None):
-                company_name = str(getattr(details, 'name'))
-            
-            market_cap_raw = getattr(details, 'market_cap', None)
-            market_cap = float(market_cap_raw) if market_cap_raw else None
-            
-            pe_ratio_raw = getattr(details, 'pe_ratio', None)
-            pe_ratio = float(pe_ratio_raw) if pe_ratio_raw else None
-            
-            finance_data[ticker] = StockFinanceData(
-                ticker=ticker,
-                current_price=current_price,
-                previous_close=previous_close,
-                change_percent=change_percent,
-                volume=volume,
-                market_cap=market_cap,
-                pe_ratio=pe_ratio,
-                company_name=company_name,
-                beta=None
-            )
-            
-            logger.info(f"Retrieved data for {ticker} from Polygon.io")
-            time.sleep(8)  # Rate limit for free tier
-            
+
+        for i, ticker in enumerate(tickers):
+            ticker, data = self._fetch_ticker_data(ticker)
+            finance_data[ticker] = data
+            dispatch_custom_event("finance_ticker", f"Completed {ticker} ({i+1}/{len(tickers)})")
+            time.sleep(2)  # Add delay between each request
+
         return {"finance_data": finance_data}
 
-    def targeted_research_node(self, state: State) -> Dict:
-        """Perform targeted research for each ticker with one comprehensive search"""
-        dispatch_custom_event("targeted_research_status", "Performing comprehensive research for each ticker...")
+    # ---------------------------- Targeted Research Node ---------------------------- #
+
+    def _fetch_ticker_research(self, ticker: str) -> tuple[str, TargetedResearch]:
+        """Fetch research data for a single ticker using Tavily."""
+        cache_key = self._get_cache_key("research", ticker)
+        cached = self._get_cached(cache_key)
+        if cached:
+            logger.info(f"Using cached research for {ticker}")
+            return ticker, cached
+
+        query = f"{ticker} earnings analyst ratings insider trading technical analysis sector news {self.current_date}"
+        search_results = {"results": []}
         
-        tickers = state["tickers"]
-        targeted_research = {}
-        
-        for ticker in tickers:
-            dispatch_custom_event("targeted_research_ticker", f"Researching {ticker}")
-            
-            # One comprehensive search query covering all important categories
-            search_query = f"{ticker} earnings analyst ratings insider trading technical analysis sector news {self.current_date}"
-            
+        try:
             search_results = self.tavily_client.search(
-                query=search_query,
+                query=query,
                 search_depth="basic",
-                max_results=10,
+                max_results=5,
                 include_raw_content=True,
                 include_answer=True,
                 include_domains=["reuters.com", "bloomberg.com", "cnbc.com", "marketwatch.com", "yahoo.com", "seekingalpha.com"]
             )
-            
-            stories = [{
-                'title': r.get('title', ''),
-                'content': r.get('content', '')[:400],
-                'url': r.get('url', ''),
-                'published_date': r.get('published_date', ''),
-                'source': r.get('source', ''),
-                'score': r.get('score', 0),
-                'domain': r.get('domain', ''),
-                'keyword': 'comprehensive'
-            } for r in search_results.get('results', [])]
-            
-            # Categorize stories based on content keywords
-            categorized_stories = {
-                "earnings_news": [],
-                "analyst_ratings": [],
-                "insider_trading": [],
-                "technical_analysis": [],
-                "sector_news": []
-            }
-            
-            earnings_keywords = ["earnings", "quarterly", "revenue", "profit", "guidance", "results"]
-            analyst_keywords = ["analyst", "rating", "target", "upgrade", "downgrade", "recommendation"]
-            insider_keywords = ["insider", "SEC", "filing", "executive", "Form 4"]
-            technical_keywords = ["technical", "support", "resistance", "RSI", "MACD", "chart"]
-            sector_keywords = ["sector", "industry", "competitor", "market share", "regulatory"]
-            
-            for story in stories:
-                content_lower = story['content'].lower() + ' ' + story['title'].lower()
-                
-                # Categorize based on content
-                if any(keyword in content_lower for keyword in earnings_keywords):
-                    categorized_stories["earnings_news"].append(story)
-                elif any(keyword in content_lower for keyword in analyst_keywords):
-                    categorized_stories["analyst_ratings"].append(story)
-                elif any(keyword in content_lower for keyword in insider_keywords):
-                    categorized_stories["insider_trading"].append(story)
-                elif any(keyword in content_lower for keyword in technical_keywords):
-                    categorized_stories["technical_analysis"].append(story)
-                else:
-                    categorized_stories["sector_news"].append(story)
-            
-            ticker_research = {
-                "ticker": ticker,
-                **categorized_stories
-            }
-            
-            targeted_research[ticker] = TargetedResearch(**ticker_research)
-            logger.info(f"Comprehensive research completed for {ticker} with {len(stories)} stories")
-            time.sleep(2)
-        
-        return {"targeted_research": targeted_research}
+        except Exception as e:
+            logger.warning(f"Error fetching research for {ticker}: {e}")
+            # search_results already initialized as empty dict above
+
+        stories = [{
+            'title': r.get('title', ''),
+            'content': r.get('content', '')[:300],
+            'url': r.get('url', ''),
+            'published_date': r.get('published_date', ''),
+            'source': r.get('source', ''),
+            'score': r.get('score', 0),
+            'domain': r.get('domain', ''),
+            'keyword': 'comprehensive'
+        } for r in search_results.get('results', [])]
+
+        categorized = {
+            "earnings_news": [],
+            "analyst_ratings": [],
+            "insider_trading": [],
+            "technical_analysis": [],
+            "sector_news": []
+        }
+
+        keywords = {
+            "earnings_news": {"earnings", "quarterly", "revenue", "profit", "guidance", "results"},
+            "analyst_ratings": {"analyst", "rating", "target", "upgrade", "downgrade", "recommendation"},
+            "insider_trading": {"insider", "sec", "filing", "executive", "form 4"},
+            "technical_analysis": {"technical", "support", "resistance", "rsi", "macd", "chart"}
+        }
+
+        for story in stories:
+            content = (story['content'] + ' ' + story['title']).lower()
+            assigned = False
+            for category, keys in keywords.items():
+                if any(k in content for k in keys):
+                    categorized[category].append(story)
+                    assigned = True
+                    break
+            if not assigned:
+                categorized["sector_news"].append(story)
+
+        research = TargetedResearch(ticker=ticker, **categorized)
+        self._set_cached(cache_key, research)
+        logger.info(f"Research completed for {ticker} with {len(stories)} stories")
+        return ticker, research
+
+    def targeted_research_node(self, state: State) -> Dict:
+        dispatch_custom_event("targeted_research_status", "Performing comprehensive research...")
+        tickers = state["tickers"]
+        research_data = {}
+
+        for i, ticker in enumerate(tickers):
+            ticker, research = self._fetch_ticker_research(ticker)
+            research_data[ticker] = research
+            dispatch_custom_event("targeted_research_ticker", f"Completed {ticker} ({i+1}/{len(tickers)})")
+            time.sleep(3)  # Add delay between each request
+
+        return {"targeted_research": research_data}
+
+    # ---------------------------- Gemini Analysis Node ---------------------------- #
+
+    def _analyze_ticker(self, ticker: str, targeted_research: Dict, finance_data: Dict, all_stories: List) -> tuple[str, StockReport]:
+        research = targeted_research.get(ticker, {})
+        finance = finance_data.get(ticker)
+        ticker_stories = [story for t, story in all_stories if t == ticker]
+
+        structured_llm = self.gemini_llm.with_structured_output(StockReport)
+        prompt = get_stock_analysis_prompt(ticker, research, ticker_stories, self.current_date)
+        report = structured_llm.invoke(prompt)
+
+        report_dict = dict(report)
+        report_dict['sources'] = ticker_stories
+        report_dict['finance_data'] = finance
+        return ticker, StockReport(**report_dict)
 
     def gemini_analysis_node(self, state: State) -> Dict:
-        """Analyze data with Gemini and generate structured reports"""
         dispatch_custom_event("gemini_analysis_status", "Generating structured stock reports...")
-        
         tickers = state["tickers"]
         targeted_research = state.get("targeted_research", {})
         finance_data = state.get("finance_data", {})
-        
-        # Collect all news stories from targeted research
-        all_news_stories = []
-        for ticker in tickers:
-            if ticker in targeted_research:
-                research = targeted_research[ticker]
-                for category, stories in research.model_dump().items():
-                    if category != 'ticker' and stories:
-                        for story in stories:
-                            story_with_ticker = story.copy()
-                            story_with_ticker['ticker'] = ticker
-                            all_news_stories.append((ticker, story_with_ticker))
-        
-        reports = {}
+
+        all_stories = []
         for ticker in tickers:
             research = targeted_research.get(ticker, {})
-            finance = finance_data.get(ticker)
-            ticker_stories = [story for t, story in all_news_stories if t == ticker]
-            
-            structured_llm = self.gemini_llm.with_structured_output(StockReport)
-            analysis_prompt = get_stock_analysis_prompt(ticker, research, ticker_stories, self.current_date)
-            report = structured_llm.invoke(analysis_prompt)
-            
-            report_dict = dict(report)
-            report_dict['sources'] = ticker_stories
-            report_dict['finance_data'] = finance
-            reports[ticker] = StockReport(**report_dict)
-        
-        # Generate market overview from all the targeted research data
-        market_overview_prompt = get_market_overview_prompt(tickers, all_news_stories, self.current_date)
-        market_overview = self.gemini_llm.invoke(market_overview_prompt).content
-        
+            if isinstance(research, dict):
+                research_dict = research
+            elif hasattr(research, 'model_dump'):
+                research_dict = research.model_dump()
+            else:
+                research_dict = {}
+                
+            for category, stories in research_dict.items():
+                if category != 'ticker' and stories:
+                    for story in stories:
+                        all_stories.append((ticker, story.copy()))
+
+        reports = {}
+        for i, ticker in enumerate(tickers):
+            ticker, report = self._analyze_ticker(ticker, targeted_research, finance_data, all_stories)
+            reports[ticker] = report
+            time.sleep(2)  # Add delay between each analysis
+            dispatch_custom_event("analysis_ticker", f"Completed {ticker} ({i+1}/{len(tickers)})")
+
         structured_reports = StockDigestOutput(
             reports=reports,
-            market_overview=str(market_overview),
-            generated_at=datetime.now().isoformat(),
+            market_overview="",
+            generated_at=datetime.now().isoformat()
         )
-        
-        dispatch_custom_event("analysis_complete", f"Generated reports for {len(reports)} stocks")
         return {"structured_reports": structured_reports}
 
-    def pdf_generation_node(self, state: State) -> Dict:
-        """Generate PDF report from the structured data"""
-        dispatch_custom_event("pdf_generation_status", "Generating PDF report...")
-        
+    # ---------------------------- Market Overview Node ---------------------------- #
+
+    def market_overview_summary_node(self, state: State) -> Dict:
+        dispatch_custom_event("market_overview_summary_status", "Creating detailed market overview...")
         structured_reports = state["structured_reports"]
         targeted_research = state.get("targeted_research", {})
-        
-        # Generate PDF using utils
+        finance_data = state.get("finance_data", {})
+
+        comprehensive_texts = []
+        for ticker, report in structured_reports.reports.items():
+            finance = finance_data.get(ticker)
+            company = finance.company_name if finance else ticker
+            market_cap = f"${finance.market_cap/1e9:.2f}B" if finance and finance.market_cap else "N/A"
+            text = (
+                f"TICKER: {ticker}\n"
+                f"COMPANY: {company}\n"
+                f"CURRENT PRICE: ${finance.current_price if finance else 'N/A'}\n"
+                f"MARKET CAP: {market_cap}\n"
+                f"P/E RATIO: {finance.pe_ratio if finance else 'N/A'}\n\n"
+                f"SUMMARY: {report.summary}\n"
+                f"CURRENT PERFORMANCE: {report.current_performance}\n"
+                f"KEY INSIGHTS: {report.key_insights}\n"
+                f"RECOMMENDATION: {report.recommendation}\n"
+                f"RISK ASSESSMENT: {report.risk_assessment}\n"
+                f"PRICE OUTLOOK: {report.price_outlook}\n"
+            )
+            comprehensive_texts.append(text)
+
+        concatenated = "\n\n".join(comprehensive_texts)
+        refine_prompt = PromptTemplate(input_variables=["text"], template=get_market_overview_summary_prompt())
+        chain = load_summarize_chain(self.gemini_llm, chain_type="refine", refine_prompt=refine_prompt)
+        docs = [Document(page_content=concatenated)]
+        overview_result = chain.invoke({"input_documents": docs})
+
+        updated_reports = StockDigestOutput(
+            reports=structured_reports.reports,
+            market_overview=overview_result["output_text"],
+            generated_at=structured_reports.generated_at
+        )
+        return {"structured_reports": updated_reports}
+
+    # ---------------------------- PDF Node ---------------------------- #
+
+    def pdf_generation_node(self, state: State) -> Dict:
+        dispatch_custom_event("pdf_generation_status", "Generating PDF report...")
+        structured_reports = state["structured_reports"]
+        targeted_research = state.get("targeted_research", {})
+
         pdf_base64, filename = generate_pdf(structured_reports, targeted_research)
-        
         pdf_data = PDFData(pdf_base64=pdf_base64, filename=filename)
-        
-        dispatch_custom_event("pdf_complete", f"PDF generated: {filename}")
         return {"pdf_data": pdf_data}
 
+    # ---------------------------- Graph ---------------------------- #
+
     def build_graph(self):
-        """Build and compile the stock digest graph"""
         graph_builder = StateGraph(State)
-        
         graph_builder.add_node("PolygonFinance", self.polygon_finance_node)
         graph_builder.add_node("TargetedResearch", self.targeted_research_node)
         graph_builder.add_node("GeminiAnalysis", self.gemini_analysis_node)
+        graph_builder.add_node("MarketOverviewSummary", self.market_overview_summary_node)
         graph_builder.add_node("PDFGeneration", self.pdf_generation_node)
-        
+
         graph_builder.add_edge(START, "PolygonFinance")
         graph_builder.add_edge("PolygonFinance", "TargetedResearch")
         graph_builder.add_edge("TargetedResearch", "GeminiAnalysis")
-        graph_builder.add_edge("GeminiAnalysis", "PDFGeneration")
+        graph_builder.add_edge("GeminiAnalysis", "MarketOverviewSummary")
+        graph_builder.add_edge("MarketOverviewSummary", "PDFGeneration")
         graph_builder.add_edge("PDFGeneration", END)
-        
+
         return graph_builder.compile()
 
     async def run_digest(self, tickers: List[str]) -> StockDigestOutput:
-        """Run the complete stock digest workflow"""
         logger.info(f"Starting stock digest for tickers: {tickers}")
-        
         graph = self.build_graph()
         initial_state = {"tickers": tickers, "date": self.current_date}
-        
         final_state = await graph.ainvoke(initial_state)
         return final_state["structured_reports"]

@@ -85,3 +85,22 @@ def get_market_overview_prompt(tickers: list, all_news_stories: list, current_da
     
     Focus on cross-ticker patterns, high-impact news, and clear, actionable insights.
     """
+
+
+def get_market_overview_summary_prompt() -> str:
+    """
+    Generate the prompt for the market overview summary chain.
+
+    Returns:
+        Formatted prompt string for the refine chain.
+    """
+    return """
+    You are a senior portfolio strategist writing a polished, professional market overview for an investor.
+
+    Conclude with a brief summary highlighting overall portfolio opportunities, risks, and positioning.
+
+    Use clear, professional language suitable for an investor newsletter. Format as a unified commentary, not bullet points or isolated paragraphs.
+
+    Analyze and incorporate the following research data:
+    {text}
+    """
