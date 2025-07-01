@@ -38,7 +38,6 @@ async def analyze_stocks(request: StockDigestRequest):
             "reports": {},
             "generated_at": result.generated_at,
             "market_overview": result.market_overview,
-            "sources": result.sources  # Include the sources field
         }
         
         # Convert each stock report to a dictionary
@@ -46,12 +45,13 @@ async def analyze_stocks(request: StockDigestRequest):
             response_data["reports"][ticker] = {
                 "ticker": report.ticker,
                 "company_name": report.company_name,
-                "stock_market_overview": report.stock_market_overview,
+                "summary": report.summary,
                 "current_performance": report.current_performance,
                 "key_insights": report.key_insights,
                 "recommendation": report.recommendation,
                 "risk_assessment": report.risk_assessment,
                 "price_outlook": report.price_outlook,
+                "sources": report.sources,
             }
         
         return response_data

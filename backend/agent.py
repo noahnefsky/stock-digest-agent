@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field
 from tavily import TavilyClient
 from typing_extensions import TypedDict
 
+from prompts import get_stock_analysis_prompt, get_market_overview_prompt
+
 load_dotenv()
 
 # Set up logging
@@ -40,24 +42,25 @@ class StockResearch(BaseModel):
     analyst_sentiment: str
     risk_factors: List[str] = Field(default_factory=list)
     price_targets: OptionalType[str] = None
+    sources: List[Dict] = Field(default_factory=list)
 
 
 class StockReport(BaseModel):
     ticker: str
     company_name: str
-    stock_market_overview: str
-    current_performance: str
+    summary: str  # Step 1 from prompt: summary of most important insights
+    current_performance: str  # Step 2 from prompt
     key_insights: List[str] = Field(default_factory=list)
-    recommendation: str
-    risk_assessment: str
-    price_outlook: str
+    recommendation: str  # Step 4 from prompt
+    risk_assessment: str  # Step 5 from prompt
+    price_outlook: str  # Step 6 from prompt
+    sources: List[Dict] = Field(default_factory=list)
 
 
 class StockDigestOutput(BaseModel):
     reports: Dict[str, StockReport] = Field(default_factory=dict)
     generated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     market_overview: str
-    sources: List[Dict] = Field(default_factory=list)  # Add sources field
 
 
 class State(TypedDict):
@@ -216,90 +219,33 @@ class StockDigestAgent:
             # Create structured parser for individual stock report
             structured_llm = self.gemini_llm.with_structured_output(StockReport)
             
-            analysis_prompt = f"""
-            You are a professional portfolio analyst providing concise updates on stock positions based on recent news and market developments.
-            
-            Analyze the following data for {ticker}:
-            
-            Research Data: {research if isinstance(research, dict) else research.model_dump()}
-            
-            Recent News Stories for {ticker}:
-            {chr(10).join([f"Title: {story['title']}{chr(10)}Content: {story['content']}{chr(10)}Source: {story['source']}{chr(10)}Date: {story['published_date']}{chr(10)}Relevance Score: {story.get('score', 'N/A')}{chr(10)}" for story in ticker_stories[:5]])}
-            
-            Current date: {self.current_date}
-            
-            Create a portfolio-focused report including:
-            1. Stock Market Overview (4-6 sentences covering recent market context and sector trends affecting this specific stock)
-            2. Current Performance (2-3 sentences on recent price action and key metrics)
-            3. Key Insights from recent news (focus on specific events, earnings, analyst actions)
-            4. Investment recommendation (Buy/Hold/Sell with brief reasoning)
-            5. Risk Assessment (2-3 sentences identifying key risks from news)
-            6. Price Outlook (1-2 sentences on near-term expectations)
-            
-            For the Key Insights section, extract specific insights from the news stories above and format them as bullet points. Focus on:
-            - Specific news events and their market impact
-            - Analyst ratings, price targets, and recommendations
-            - Earnings announcements, revenue figures, or financial metrics
-            - Strategic moves, partnerships, or business developments
-            - Regulatory news or legal developments
-            - Market sentiment shifts or institutional actions
-            
-            Format the key insights as clear, concise bullet points that highlight the most important news-driven developments. Each bullet should be a specific, actionable insight from the news feed.
-            
-            IMPORTANT: For the key_insights field, provide each insight as a separate string in the list. Each insight should be:
-            - Concise but informative (1-2 sentences max)
-            - Based directly on the news stories provided
-            - Include specific details like numbers, dates, or analyst names when available
-            - Focus on actionable information that investors can use
-            - Prioritize insights from high-relevance sources (higher score)
-            
-            Examples of good key insights:
-            - "Analyst John Smith upgraded rating to Buy with $150 price target citing strong Q4 earnings"
-            - "Company announced $2B acquisition of TechCorp, expected to close Q2 2024"
-            - "Q3 revenue beat estimates by 15%, driven by 40% growth in cloud services"
-            - "CEO announced new AI partnership with Microsoft, stock up 8% on the news"
-            - "Federal Reserve decision impacts sector, company expects 5% revenue growth"
-            
-            Focus on providing portfolio-relevant updates that help investors understand:
-            - How recent news affects their position
-            - What to watch for in the coming days/weeks
-            - Key risks and opportunities from current events
-            - Actionable insights for portfolio management
-            
-            Provide the ticker symbol as: {ticker}
-            Use a generic company name if not available in the data.
-            """
+            analysis_prompt = get_stock_analysis_prompt(ticker, research, ticker_stories, self.current_date)
             
             # Generate structured report for this ticker
             report = structured_llm.invoke(analysis_prompt)
-            reports[ticker] = report
+            
+            # Add sources to the report for this specific ticker
+            ticker_sources = []
+            for ticker_symbol, story in all_news_stories:
+                if ticker_symbol == ticker:
+                    source_dict = {
+                        'ticker': ticker_symbol,
+                        'title': story.get('title', ''),
+                        'url': story.get('url', ''),
+                        'source': story.get('source', ''),
+                        'domain': story.get('domain', ''),
+                        'published_date': story.get('published_date', ''),
+                        'score': story.get('score', 0)
+                    }
+                    ticker_sources.append(source_dict)
+            
+            # Create a new report instance with the sources included
+            report_dict = report.model_dump()
+            report_dict['sources'] = ticker_sources
+            reports[ticker] = StockReport(**report_dict)
         
         # Generate comprehensive market overview based on all news stories
-        market_overview_prompt = f"""
-        You are a senior market analyst creating a concise market overview based on recent news and developments.
-        
-        Analyze the following news stories from the past few days for these stocks: {', '.join(tickers)}
-        
-        News Stories Summary:
-        {chr(10).join([f"Ticker: {ticker}{chr(10)}Title: {story['title']}{chr(10)}Content: {story['content'][:300]}...{chr(10)}Source: {story['source']}{chr(10)}Date: {story['published_date']}{chr(10)}" for ticker, story in all_news_stories[:15]])}
-        
-        Current date: {self.current_date}
-        
-        Create a concise market overview (4-5 sentences) that covers:
-        
-        1. Overall market sentiment across these stocks
-        2. Key themes or trends emerging from the news
-        3. Notable developments and their market implications
-        4. Brief risk assessment or opportunities
-        
-        Focus on:
-        - Connecting individual stock news to broader market themes
-        - Identifying patterns across multiple stocks
-        - Providing clear, actionable insights
-        - Maintaining professional, analytical tone
-        
-        Keep the overview concise but insightful, suitable for quick market assessment.
-        """
+        market_overview_prompt = get_market_overview_prompt(tickers, all_news_stories, self.current_date)
         
         market_overview_response = self.gemini_llm.invoke(market_overview_prompt)
         market_overview = market_overview_response.content
@@ -310,26 +256,11 @@ class StockDigestAgent:
         else:
             market_overview = str(market_overview)
         
-        # Convert all_news_stories to a list of dictionaries for the sources
-        sources_list = []
-        for ticker, story in all_news_stories:
-            source_dict = {
-                'ticker': ticker,
-                'title': story.get('title', ''),
-                'url': story.get('url', ''),
-                'source': story.get('source', ''),
-                'domain': story.get('domain', ''),
-                'published_date': story.get('published_date', ''),
-                'score': story.get('score', 0)
-            }
-            sources_list.append(source_dict)
-        
         # Create the final structured output
         structured_reports = StockDigestOutput(
             reports=reports,
             market_overview=market_overview,
             generated_at=datetime.now().isoformat(),
-            sources=sources_list
         )
         
         dispatch_custom_event("analysis_complete", f"Generated reports for {len(reports)} stocks")

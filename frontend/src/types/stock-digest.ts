@@ -1,12 +1,13 @@
 export interface StockReport {
   ticker: string;
   company_name: string;
-  stock_market_overview: string;
-  current_performance: string;
-  key_insights: string[];
-  recommendation: string;
-  risk_assessment: string;
-  price_outlook: string;
+  summary: string;  // Step 1 from prompt: summary of most important insights
+  current_performance: string;  // Step 2 from prompt
+  key_insights: string[];  // Step 3 from prompt
+  recommendation: string;  // Step 4 from prompt
+  risk_assessment: string;  // Step 5 from prompt
+  price_outlook: string;  // Step 6 from prompt
+  sources: Source[];
 }
 
 export interface Source {
@@ -23,7 +24,6 @@ export interface StockDigestResponse {
   reports: Record<string, StockReport>;
   generated_at: string;
   market_overview: string;
-  sources: Source[];
 }
 
 export interface StockDigestRequest {

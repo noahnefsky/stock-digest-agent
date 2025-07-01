@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, TrendingUp, TrendingDown, DollarSign, BarChart3, Clock, Download, Target, AlertTriangle, ChevronDown, ExternalLink } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, DollarSign, BarChart3, Clock, Download, Target, AlertTriangle, ChevronDown, ExternalLink, Circle } from 'lucide-react';
 import { StockDigestResponse } from '@/types/stock-digest';
 import {
   Select,
@@ -55,9 +55,9 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 pt-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-2">
           <Button
             onClick={onReset}
             variant="outline"
@@ -66,46 +66,34 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
             <ArrowLeft className="h-4 w-4" />
             Back to Input
           </Button>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-full">
+              <BarChart3 className="h-6 w-6 text-blue-600" />
+            </div>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              Portfolio Update Report
+            </h1>
+          </div>
           <Button variant="outline" className="flex items-center gap-2 hover:bg-white/80">
             <Download className="h-4 w-4" />
             Export Report
           </Button>
         </div>
 
-        {/* Report Title */}
-        <div className="text-center mb-2">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="p-3 bg-blue-100 rounded-full">
-              <BarChart3 className="h-8 w-8 text-blue-600" />
-            </div>
-            <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              Portfolio Update Report
-            </h1>
-          </div>
-          <p className="text-xl text-gray-600 flex items-center justify-center gap-2">
-            <Clock className="h-6 w-6" />
+        {/* Date */}
+        <div className="text-center mb-4">
+          <p className="text-md text-gray-600 flex items-center justify-center gap-2">
+            <Clock className="h-4 w-4" />
             {currentDate}
           </p>
         </div>
 
         {/* Stock Selector */}
-        <div className="mb-12">
-          {/* <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Stock Analysis</h2>
-            <p className="text-gray-600">Select a stock to view detailed analysis</p>
-          </div> */}
-          
-          <div className="max-w-md mx-auto">
-            <Card className="border-0 shadow-xl bg-white/95 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-3 text-xl">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <BarChart3 className="h-5 w-5 text-blue-600" />
-                  </div>
-                  Select Stock
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+        <div className="mb-8">
+          <div className="max-w-sm mx-auto">
+            <Card className="border-0 shadow-lg bg-white/95 backdrop-blur-sm">
+              <CardContent className="p-4">
+                <h3 className="text-center text-lg font-semibold text-gray-700 mb-3">Select a stock in your portfolio</h3>
                 <Select value={selectedTicker} onValueChange={setSelectedTicker}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Choose a stock ticker" />
@@ -123,36 +111,11 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
           </div>
         </div>
 
-        {/* Market Overview Card */}
-        {/* <div className="mb-12">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Market Overview</h2>
-            <p className="text-gray-600">Current market conditions and trends</p>
-          </div>
-          
-          <Card className="border-0 shadow-xl bg-white/95 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3 text-2xl">
-                <div className="p-2 bg-indigo-100 rounded-lg">
-                  <BarChart3 className="h-6 w-6 text-indigo-600" />
-                </div>
-                Overall Market Context
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-6 rounded-lg border border-indigo-100">
-                <p className="text-gray-700 leading-relaxed text-lg">
-                  {stockDigest.market_overview}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div> */}
 
         {/* Individual Stock Report */}
         {selectedStock && (
           <div className="mb-12">
-            
+
             <div className="space-y-8">
               {/* Stock Header Card */}
               <Card className="border-0 shadow-xl bg-white/95 backdrop-blur-sm hover:shadow-2xl transition-all duration-300">
@@ -176,9 +139,9 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
                   <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-lg border border-indigo-100">
                     <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
                       <BarChart3 className="h-4 w-4 text-indigo-600" />
-                      Market Context
+                      Stock Overview
                     </h4>
-                    <p className="text-gray-700 leading-relaxed">{selectedStock.stock_market_overview}</p>
+                    <p className="text-gray-700 leading-relaxed">{selectedStock.summary}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -192,8 +155,8 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
                 {Array.isArray(selectedStock.key_insights) && selectedStock.key_insights.length > 0 ? (
                   <ul className="space-y-3">
                     {selectedStock.key_insights.map((insight, index) => (
-                      <li key={index} className="text-gray-700 leading-relaxed flex items-start gap-3">
-                        <span className="text-purple-600 font-bold mt-1 text-lg">•</span>
+                      <li key={index} className="text-gray-700 leading-relaxed flex items-center gap-3">
+                        <Circle className="h-5 w-5 text-purple-600 flex-shrink-0" />
                         <span className="text-base">{insight}</span>
                       </li>
                     ))}
@@ -258,108 +221,106 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
               </div>
 
               {/* Final Recommendation */}
+              <div className="bg-gradient-to-r from-slate-100 to-gray-100 p-6 rounded-xl border-2 border-dashed border-slate-300 shadow-sm">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-1.5 bg-slate-200 rounded-md">
+                    <Target className="h-4 w-4 text-slate-600" />
+                  </div>
+                  <h4 className="text-lg font-medium text-slate-700">Final Recommendation</h4>
+                </div>
+                <div className="bg-white/70 p-4 rounded-lg border border-slate-200">
+                  <p className="text-base text-slate-800 font-medium">{selectedStock.recommendation}</p>
+                </div>
+              </div>
+
+              {/* Sources Panel for this Stock */}
               <Card className="border-0 shadow-lg bg-white/95 backdrop-blur-sm hover:shadow-xl transition-all duration-300">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-3 text-xl">
-                    <div className="p-2 bg-gray-100 rounded-lg">
-                      <Target className="h-5 w-5 text-gray-600" />
-                    </div>
-                    Final Recommendation
-                  </CardTitle>
+                  <button
+                    onClick={() => setShowSources(!showSources)}
+                    className="flex items-center justify-between w-full text-left hover:bg-gray-50 p-2 rounded-lg transition-colors"
+                  >
+                    <CardTitle className="flex items-center gap-3 text-xl">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        <ExternalLink className="h-5 w-5 text-blue-600" />
+                      </div>
+                      Research Sources ({selectedStock.sources?.length || 0})
+                    </CardTitle>
+                    <ChevronDown
+                      className={`h-5 w-5 text-gray-600 transition-transform duration-200 ${showSources ? 'rotate-180' : ''
+                        }`}
+                    />
+                  </button>
                 </CardHeader>
-                <CardContent>
-                  <div className="bg-gradient-to-r from-gray-50 to-slate-50 p-6 rounded-lg border border-gray-200">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-semibold text-gray-900">{selectedStock.recommendation}</span>
+                {showSources && (
+                  <CardContent>
+                    <div className="space-y-4">
+                      <p className="text-gray-600 text-sm">
+                        Sources used for {selectedStock.ticker} analysis, sorted by relevance and recency:
+                      </p>
+                      <div className="grid gap-4">
+                        {selectedStock.sources && selectedStock.sources.length > 0 ? (
+                          selectedStock.sources
+                            .sort((a, b) => b.score - a.score) // Sort by relevance score
+                            .map((source, index) => (
+                              <div
+                                key={index}
+                                className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <Badge variant="outline" className="text-xs">
+                                        {source.ticker}
+                                      </Badge>
+                                      <Badge variant="secondary" className="text-xs">
+                                        Score: {source.score.toFixed(1)}
+                                      </Badge>
+                                      <span className="text-xs text-gray-500">
+                                        {source.published_date}
+                                      </span>
+                                    </div>
+                                    <h4 className="font-semibold text-gray-900 mb-1 line-clamp-2">
+                                      {source.title}
+                                    </h4>
+                                    <p className="text-sm text-gray-600 mb-1">
+                                      {source.source}
+                                    </p>
+                                    {source.url && (
+                                      <p className="text-xs text-blue-600 mb-2 truncate">
+                                        {source.url}
+                                      </p>
+                                    )}
+                                  </div>
+                                  {source.url && (
+                                    <a
+                                      href={source.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="ml-4 p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors flex-shrink-0"
+                                      title="Open source"
+                                    >
+                                      <ExternalLink className="h-4 w-4" />
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                        ) : (
+                          <div className="text-center py-8 text-gray-500">
+                            <p>No sources available for {selectedStock.ticker} analysis.</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
+                  </CardContent>
+                )}
               </Card>
             </div>
           </div>
         )}
 
-        {/* Sources Panel */}
-        <div className="mt-16">
-          <Card className="border-0 shadow-xl bg-white/95 backdrop-blur-sm">
-            <CardHeader>
-              <button
-                onClick={() => setShowSources(!showSources)}
-                className="flex items-center justify-between w-full text-left hover:bg-gray-50 p-2 rounded-lg transition-colors"
-              >
-                <CardTitle className="flex items-center gap-3 text-xl">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    <BarChart3 className="h-5 w-5 text-gray-600" />
-                  </div>
-                  Research Sources ({stockDigest.sources?.length || 0})
-                </CardTitle>
-                <ChevronDown 
-                  className={`h-5 w-5 text-gray-600 transition-transform duration-200 ${
-                    showSources ? 'rotate-180' : ''
-                  }`} 
-                />
-              </button>
-            </CardHeader>
-            {showSources && (
-              <CardContent>
-                <div className="space-y-4">
-                  <p className="text-gray-600 text-sm">
-                    Sources used for this analysis, sorted by relevance and recency:
-                  </p>
-                  <div className="grid gap-4">
-                    {stockDigest.sources && stockDigest.sources.length > 0 ? (
-                      stockDigest.sources
-                        .sort((a, b) => b.score - a.score) // Sort by relevance score
-                        .map((source, index) => (
-                          <div
-                            key={index}
-                            className="bg-gradient-to-r from-gray-50 to-blue-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Badge variant="outline" className="text-xs">
-                                    {source.ticker}
-                                  </Badge>
-                                  <Badge variant="secondary" className="text-xs">
-                                    Score: {source.score.toFixed(1)}
-                                  </Badge>
-                                  <span className="text-xs text-gray-500">
-                                    {source.published_date}
-                                  </span>
-                                </div>
-                                <h4 className="font-semibold text-gray-900 mb-1 truncate">
-                                  {source.title}
-                                </h4>
-                                <p className="text-sm text-gray-600 mb-2">
-                                  {source.source} • {source.domain}
-                                </p>
-                              </div>
-                              {source.url && (
-                                <a
-                                  href={source.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="ml-4 p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
-                                  title="Open source"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        ))
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <p>No sources available for this analysis.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            )}
-          </Card>
-        </div>
+
       </div>
     </div>
   );

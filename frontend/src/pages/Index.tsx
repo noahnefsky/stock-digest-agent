@@ -57,6 +57,24 @@ const Index = () => {
           </p>
         </div>
 
+        {/* Main Input Card */}
+        <Card className="max-w-2xl mx-auto border-0 shadow-xl bg-white/90 backdrop-blur-sm mb-12">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Enter Stock Tickers</CardTitle>
+            <CardDescription className="text-base">
+              Add the stock symbols you want to analyze (e.g., AAPL, GOOGL, MSFT)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <TickerInput 
+              tickers={tickers} 
+              onTickersChange={setTickers}
+              onGenerateReport={handleGenerateReport}
+              isGenerating={isGenerating}
+            />
+          </CardContent>
+        </Card>
+
         {/* Features Cards */}
         <div className="grid md:grid-cols-3 gap-6 mb-12">
           <Card className="text-center border-0 shadow-lg bg-white/80 backdrop-blur-sm">
@@ -101,24 +119,6 @@ const Index = () => {
             </CardContent>
           </Card>
         </div>
-
-        {/* Main Input Card */}
-        <Card className="max-w-2xl mx-auto border-0 shadow-xl bg-white/90 backdrop-blur-sm">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Enter Stock Tickers</CardTitle>
-            <CardDescription className="text-base">
-              Add the stock symbols you want to analyze (e.g., AAPL, GOOGL, MSFT)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <TickerInput 
-              tickers={tickers} 
-              onTickersChange={setTickers}
-              onGenerateReport={handleGenerateReport}
-              isGenerating={isGenerating}
-            />
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
