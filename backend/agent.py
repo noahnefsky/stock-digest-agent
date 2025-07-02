@@ -41,53 +41,36 @@ class StockDigestAgent:
         self.current_date = datetime.now().strftime("%Y-%m-%d")
 
     def _fetch_ticker_data(self, ticker: str) -> tuple[str, StockFinanceData]:
-        """Fetch financial data for a single ticker."""
         try:
             details = self.polygon_client.get_ticker_details(ticker)
             prev_day = self.polygon_client.get_previous_close_agg(ticker)
-            today = datetime.now()
-            yesterday = today - timedelta(days=1)
-            current_day = self.polygon_client.get_aggs(ticker, 1, "day", from_=yesterday.strftime("%Y-%m-%d"), to=today.strftime("%Y-%m-%d"), limit=1)
+            if isinstance(prev_day, list) and prev_day:
+                prev_bar = prev_day[0]
+                previous_close = float(getattr(prev_bar, 'close', 0) or 0)
+            
+            # For free tier, we'll use previous close as current price
+            current_price = previous_close
+            
         except Exception as e:
             logger.warning(f"Error fetching data for {ticker}: {e}")
-            details = type('obj', (object,), {'name': ticker, 'market_cap': None, 'pe_ratio': None})()
-            prev_day = []
-            current_day = []
-
-        current_price = previous_close = 0.0
-        volume = 0
-        
-        if isinstance(prev_day, list) and prev_day:
-            prev_bar = prev_day[0]
-            previous_close = float(getattr(prev_bar, 'close', 0) or 0)
-            volume = int(getattr(prev_bar, 'volume', 0) or 0)
-        
-        if isinstance(current_day, list) and current_day:
-            current_bar = current_day[0]
-            current_price = float(getattr(current_bar, 'close', 0) or 0)
-        else:
-            current_price = previous_close
-
-        change_percent = 0.0
-        if previous_close > 0:
-            change_percent = ((current_price - previous_close) / previous_close) * 100
+            details = type('obj', (object,), {
+                'name': ticker, 
+                'market_cap': None, 
+                'last_updated_utc': None,
+                'share_class_shares_outstanding': None
+            })()
+            current_price = 0.0
 
         company_name = getattr(details, 'name', ticker)
         market_cap = float(getattr(details, 'market_cap', 0) or 0) or None
-        pe_ratio = float(getattr(details, 'pe_ratio', 0) or 0) or None
 
         finance_data = StockFinanceData(
             ticker=ticker,
             current_price=current_price,
-            previous_close=previous_close,
-            change_percent=change_percent,
-            volume=volume,
             market_cap=market_cap,
-            pe_ratio=pe_ratio,
             company_name=company_name,
-            beta=None
         )
-        logger.info(f"Retrieved data for {ticker} from Polygon.io")
+        logger.info(f"Retrieved data for {ticker} from Polygon.io - Current: ${current_price:.2f}")
         return ticker, finance_data
 
     def stock_metrics_node(self, state: State) -> Dict:
@@ -104,7 +87,6 @@ class StockDigestAgent:
         return {"finance_data": finance_data}
 
     def _fetch_ticker_research(self, ticker: str) -> tuple[str, TargetedResearch]:
-        """Fetch research data for a single ticker using Tavily."""
         query = f"{ticker} earnings analyst ratings insider trading technical analysis sector news {self.current_date}"
         search_results = {"results": []}
         
@@ -194,7 +176,6 @@ class StockDigestAgent:
         targeted_research = state.get("targeted_research", {})
         finance_data = state.get("finance_data", {})
 
-        # Collect all stories from research data
         all_stories = []
         for ticker in tickers:
             research = targeted_research.get(ticker, {})
@@ -209,7 +190,6 @@ class StockDigestAgent:
                 if category != 'ticker' and stories:
                     all_stories.extend((ticker, story.copy()) for story in stories)
 
-        # Generate reports for each ticker
         reports = {}
         for i, ticker in enumerate(tickers):
             ticker, report = self._analyze_ticker(ticker, targeted_research, finance_data, all_stories)
@@ -241,7 +221,6 @@ class StockDigestAgent:
                 f"COMPANY: {company}\n"
                 f"CURRENT PRICE: ${finance.current_price if finance else 'N/A'}\n"
                 f"MARKET CAP: {market_cap}\n"
-                f"P/E RATIO: {finance.pe_ratio if finance else 'N/A'}\n\n"
                 f"SUMMARY: {report.summary}\n"
                 f"CURRENT PERFORMANCE: {report.current_performance}\n"
                 f"KEY INSIGHTS: {report.key_insights}\n"
@@ -266,7 +245,6 @@ class StockDigestAgent:
         return {"structured_reports": updated_reports}
 
     def stock_recommendations_research_node(self, state: State) -> Dict:
-        """Node that searches for current stock recommendations using Tavily."""
         dispatch_custom_event("stock_recommendations_status", "Finding current stock recommendations...")
         
         query = "best stock picks analyst recommendations buy rating upgrades 2025"
@@ -279,14 +257,13 @@ class StockDigestAgent:
             include_domains=["seekingalpha.com", "marketwatch.com", "yahoo.com", "cnbc.com", "bloomberg.com", "reuters.com"]
         )
         
-        # Extract text from search results - try answer first, then results content
+        # Extract text from search results
         answer_text = search_results.get("answer", "")
         if not answer_text and "results" in search_results:
-            # Fallback to combining content from search results
             results_content = []
-            for result in search_results["results"][:3]:  # Use first 3 results
+            for result in search_results["results"][:3]:
                 if "content" in result:
-                    results_content.append(result["content"][:300])  # Limit each result
+                    results_content.append(result["content"][:300])  # Limit each result for speed
             answer_text = " ".join(results_content)
         
         logger.info(f"Stock recommendations found: {answer_text[:200]}...")
@@ -295,7 +272,6 @@ class StockDigestAgent:
         return {"recommendations_raw_text": answer_text}
 
     def recommendation_formatting_node(self, state: State) -> Dict:
-        """Node that formats stock recommendations using Gemini."""
         dispatch_custom_event("recommendation_formatting_status", "Formatting stock recommendations...")
         
         raw_text = state.get("recommendations_raw_text", "")

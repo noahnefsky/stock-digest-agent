@@ -1,13 +1,8 @@
 export interface StockFinanceData {
   ticker: string;
   current_price: number;
-  previous_close: number;
-  change_percent: number;
-  volume: number;
   market_cap?: number;
-  pe_ratio?: number;
   company_name: string;
-  beta?: number;
 }
 
 export interface StockReport {

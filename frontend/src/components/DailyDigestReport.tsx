@@ -181,15 +181,10 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
                           Financial Metrics
                         </h4>
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                          {/* Price and Change */}
+                          {/* Current Price */}
                           <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-xl border border-green-200 shadow-sm hover:shadow-md transition-all duration-200">
                             <div className="text-xs text-gray-600 font-medium mb-1">Current Price</div>
-                            <div className='flex flex-row gap-2 items-center'>
-                              <div className="text-xl font-bold text-gray-900">${selectedStock.finance_data.current_price?.toFixed(2)}</div>
-                              <div className={`text-sm font-medium px-2 py-1 rounded-full ${selectedStock.finance_data.change_percent >= 0 ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'}`}>
-                                {selectedStock.finance_data.change_percent >= 0 ? '+' : ''}{selectedStock.finance_data.change_percent?.toFixed(2)}%
-                              </div>
-                            </div>
+                            <div className="text-xl font-bold text-gray-900">${selectedStock.finance_data.current_price?.toFixed(2)}</div>
                           </div>
 
                           {/* Market Cap */}
@@ -207,34 +202,6 @@ export const DailyDigestReport: React.FC<DailyDigestReportProps> = ({
                             </div>
                           )}
 
-                          {/* P/E Ratio */}
-                          {selectedStock.finance_data.pe_ratio && (
-                            <div className="bg-gradient-to-r from-purple-50 to-violet-50 p-4 rounded-xl border border-purple-200 shadow-sm hover:shadow-md transition-all duration-200">
-                              <div className="text-xs text-gray-600 font-medium mb-1">P/E Ratio</div>
-                              <div className="text-xl font-bold text-gray-900">{selectedStock.finance_data.pe_ratio.toFixed(2)}</div>
-                            </div>
-                          )}
-
-                          {/* Volume */}
-                          <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-4 rounded-xl border border-orange-200 shadow-sm hover:shadow-md transition-all duration-200">
-                            <div className="text-xs text-gray-600 font-medium mb-1">Volume</div>
-                            <div className="text-xl font-bold text-gray-900">
-                              {selectedStock.finance_data.volume >= 1000000 ?
-                                `${(selectedStock.finance_data.volume / 1000000).toFixed(1)}M` :
-                                selectedStock.finance_data.volume >= 1000 ?
-                                  `${(selectedStock.finance_data.volume / 1000).toFixed(0)}K` :
-                                  selectedStock.finance_data.volume.toLocaleString()
-                              }
-                            </div>
-                          </div>
-
-                          {/* Beta */}
-                          {selectedStock.finance_data.beta && (
-                            <div className="bg-gradient-to-r from-cyan-50 to-teal-50 p-4 rounded-xl border border-cyan-200 shadow-sm hover:shadow-md transition-all duration-200">
-                              <div className="text-xs text-gray-600 font-medium mb-1">Beta</div>
-                              <div className="text-xl font-bold text-gray-900">{selectedStock.finance_data.beta.toFixed(2)}</div>
-                            </div>
-                          )}
                         </div>
                       </div>
                     )}

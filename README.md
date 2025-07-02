@@ -31,7 +31,7 @@ BACKEND_PORT=3000
 ## Features
 
 ### Core Functionality
-- **Real-time Financial Data**: Fetch current prices, volume, market cap, and P/E ratios from Polygon.io
+- **Real-time Financial Data**: Fetch current price and market cap. Due to free trial limits we can only do the day before's price.
 - **Comprehensive Research**: Gather news and analysis from multiple financial sources using Tavily
 - **AI-Powered Analysis**: Generate insights using Google's Gemini AI model
 - **Targeted Research**: Perform comprehensive searches for earnings, analyst ratings, insider trading, technical analysis, and sector news

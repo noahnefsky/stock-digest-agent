@@ -11,7 +11,6 @@ from models import StockDigestOutput, TargetedResearch
 
 
 def create_pdf_styles() -> Dict[str, ParagraphStyle]:
-    """Create and return custom PDF styles"""
     base_styles = getSampleStyleSheet()
     
     styles = {
@@ -49,13 +48,11 @@ def create_pdf_styles() -> Dict[str, ParagraphStyle]:
 
 
 def format_date(generated_at: str) -> str:
-    """Format the generated date nicely"""
     date = datetime.fromisoformat(generated_at.replace('Z', '+00:00'))
     return date.strftime("%B %d, %Y")
 
 
 def add_section(story: List, styles: Dict, title: str, content: str, add_page_break: bool = False):
-    """Add a section with title and content to the story"""
     if title:
         story.append(Paragraph(title, styles['subtitle']))
     story.append(Paragraph(content, styles['normal']))
@@ -65,19 +62,14 @@ def add_section(story: List, styles: Dict, title: str, content: str, add_page_br
 
 
 def build_financial_table(finance_data) -> Table:
-    """Build the financial data table"""
     table_data = [
         ['Metric', 'Value'],
         ['Current Price', f"${finance_data.current_price:.2f}"],
-        ['Previous Close', f"${finance_data.previous_close:.2f}"],
-        ['Change %', f"{finance_data.change_percent:.2f}%"],
-        ['Volume', f"{finance_data.volume:,}"],
     ]
     
     # Add optional fields if they exist
     optional_fields = {
         'Market Cap': (finance_data.market_cap, lambda x: f"${x:,.0f}"),
-        'P/E Ratio': (finance_data.pe_ratio, lambda x: f"{x:.2f}")
     }
     
     for label, (value, formatter) in optional_fields.items():
@@ -100,7 +92,6 @@ def build_financial_table(finance_data) -> Table:
 
 
 def add_insights_section(story: List, styles: Dict, insights):
-    """Add key insights section"""
     story.append(Paragraph("Key Insights", styles['subtitle']))
     
     if isinstance(insights, list):
@@ -113,7 +104,6 @@ def add_insights_section(story: List, styles: Dict, insights):
 
 
 def add_targeted_research(story: List, styles: Dict, ticker: str, targeted_research: Dict):
-    """Add targeted research summary if available"""
     if ticker not in targeted_research:
         return
     
@@ -133,8 +123,6 @@ def add_targeted_research(story: List, styles: Dict, ticker: str, targeted_resea
 
 
 def build_stock_report(story: List, styles: Dict, ticker: str, report, targeted_research: Dict):
-    """Build individual stock report content"""
-    # Header
     story.append(Paragraph(f"{ticker} - {report.company_name}", styles['title']))
     story.append(Spacer(1, 12))
     
@@ -160,14 +148,12 @@ def build_stock_report(story: List, styles: Dict, ticker: str, report, targeted_
         else:
             add_section(story, styles, title, content)
     
-    # Add targeted research
     add_targeted_research(story, styles, ticker, targeted_research)
     
     story.append(PageBreak())
 
 
 def build_sources_section(story: List, styles: Dict, structured_reports: StockDigestOutput):
-    """Build the sources section"""
     story.append(Paragraph("Research Sources", styles['title']))
     story.append(Spacer(1, 12))
     
@@ -198,7 +184,6 @@ def build_sources_section(story: List, styles: Dict, structured_reports: StockDi
 
 
 def build_recommendations_section(story: List, styles: Dict, ticker_suggestions: Dict[str, str]):
-    """Build the stock recommendations section"""
     if not ticker_suggestions:
         return
         
@@ -215,12 +200,6 @@ def build_recommendations_section(story: List, styles: Dict, ticker_suggestions:
 
 
 def generate_pdf(structured_reports: StockDigestOutput, targeted_research: Dict) -> Tuple[str, str]:
-    """
-    Generate PDF report from structured data
-    
-    Returns:
-        Tuple of (pdf_base64_string, filename)
-    """
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = create_pdf_styles()
@@ -228,27 +207,20 @@ def generate_pdf(structured_reports: StockDigestOutput, targeted_research: Dict)
     
     story = []
     
-    # Title page
     story.append(Paragraph("Daily Stock Digest Report", styles['title']))
     story.append(Spacer(1, 12))
     story.append(Paragraph(f"Generated on: {formatted_date}", styles['normal']))
     story.append(Spacer(1, 20))
-    
-    # Market overview
     add_section(story, styles, "Market Overview", structured_reports.market_overview, add_page_break=True)
     
-    # Individual stock reports
     for ticker, report in structured_reports.reports.items():
         build_stock_report(story, styles, ticker, report, targeted_research)
     
-    # Recommendations and sources
     build_recommendations_section(story, styles, structured_reports.ticker_suggestions)
     build_sources_section(story, styles, structured_reports)
     
-    # Build PDF
     doc.build(story)
     
-    # Encode to base64
     pdf_content = buffer.getvalue()
     buffer.close()
     

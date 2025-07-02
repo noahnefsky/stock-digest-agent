@@ -1,16 +1,4 @@
 def get_stock_analysis_prompt(ticker: str, research_data: dict | object, ticker_stories: list, current_date: str) -> str:
-    """
-    Generate the prompt for individual stock analysis
-    
-    Args:
-        ticker: Stock ticker symbol
-        research_data: Research data for the stock (dict or Pydantic model)
-        ticker_stories: List of news stories for the ticker
-        current_date: Current date string
-    
-    Returns:
-        Formatted prompt string
-    """
     # Handle both dict and Pydantic model types
     if isinstance(research_data, dict):
         research_str = str(research_data)
@@ -50,17 +38,6 @@ def get_stock_analysis_prompt(ticker: str, research_data: dict | object, ticker_
 
 
 def get_market_overview_prompt(tickers: list, all_news_stories: list, current_date: str) -> str:
-    """
-    Generate the prompt for market overview analysis
-    
-    Args:
-        tickers: List of stock tickers
-        all_news_stories: List of all news stories across all tickers
-        current_date: Current date string
-    
-    Returns:
-        Formatted prompt string
-    """
     return f"""
     You are a senior market analyst creating a concise market overview that connects individual stock developments to broader market trends.
     
@@ -77,12 +54,6 @@ def get_market_overview_prompt(tickers: list, all_news_stories: list, current_da
 
 
 def get_market_overview_summary_prompt() -> str:
-    """
-    Generate the prompt for the market overview summary chain.
-
-    Returns:
-        Formatted prompt string for the refine chain.
-    """
     return """
     You are a senior portfolio strategist writing a polished, professional market overview for an investor.
 
@@ -96,15 +67,6 @@ def get_market_overview_summary_prompt() -> str:
 
 
 def get_stock_recommendations_extraction_prompt(raw_text: str) -> str:
-    """
-    Generate the prompt for extracting stock recommendations from raw text.
-    
-    Args:
-        raw_text: Raw text containing stock recommendations
-    
-    Returns:
-        Formatted prompt string for extraction
-    """
     return f"""
     Extract stock ticker symbols and their detailed investment reasons from the following text.
     Only return actual stock ticker symbols (2-5 letter codes like AAPL, MSFT, NVDA) and specific, detailed reasons.

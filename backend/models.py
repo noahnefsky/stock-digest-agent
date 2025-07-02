@@ -8,13 +8,8 @@ from typing_extensions import TypedDict
 class StockFinanceData(BaseModel):
     ticker: str
     current_price: float
-    previous_close: float
-    change_percent: float
-    volume: int
     market_cap: OptionalType[float] = None
-    pe_ratio: OptionalType[float] = None
     company_name: str
-    beta: OptionalType[float] = None
 
 
 class StockResearch(BaseModel):
