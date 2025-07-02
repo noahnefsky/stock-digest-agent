@@ -48,10 +48,11 @@ stock-digest-agent/
 ### LangGraph Workflow
 The system uses LangGraph to orchestrate a multi-step workflow:
 
-1. **PolygonFinance Node**: Fetch financial data from Polygon.io with rate limiting (8-second delays)
+1. **StockMetrics Node**: Fetch financial data from Polygon.io with rate limiting (2-second delays)
 2. **TargetedResearch Node**: Perform comprehensive keyword searches for each ticker using Tavily
-3. **GeminiAnalysis Node**: AI-powered report generation with structured output
-4. **PDFGeneration Node**: Create downloadable PDF reports using ReportLab
+3. **GeminiAnalysisFormatter Node**: AI-powered report generation with structured output using Gemini
+4. **MarketOverviewSummary Node**: Create comprehensive market overview using LangChain's refine summarization chain
+5. **PDFGeneration Node**: Create downloadable PDF reports using ReportLab
 
 ### Data Models
 - `StockFinanceData`: Financial metrics and pricing data from Polygon.io
@@ -61,10 +62,11 @@ The system uses LangGraph to orchestrate a multi-step workflow:
 - `PDFData`: Base64-encoded PDF with filename
 
 ### Key Features
-- **Rate Limiting**: Optimized delays to stay within API limits
+- **Rate Limiting**: Optimized delays to stay within API limits (2-3 seconds between requests)
 - **Error Handling**: Graceful fallbacks for missing data
 - **Structured Output**: Uses Pydantic models for consistent data structure
 - **Real-time Progress**: Custom event dispatching for frontend updates
+- **Market Overview Generation**: Uses LangChain's refine summarization chain to create comprehensive market insights
 
 ## Frontend Features
 
@@ -164,8 +166,8 @@ Generate a complete stock digest for multiple tickers.
 ## Technical Details
 
 ### Rate Limiting
-- Polygon.io: 8-second delays between requests for free tier compliance
-- Tavily: 2-second delays between searches
+- Polygon.io: 2-second delays between requests for free tier compliance
+- Tavily: 3-second delays between searches
 - Optimized to stay within API limits while maintaining performance
 
 ### PDF Generation
@@ -184,7 +186,8 @@ Generate a complete stock digest for multiple tickers.
 - Uses Google's Gemini 1.5 Flash model for analysis
 - Structured output using Pydantic models
 - Portfolio-focused prompts for actionable insights
-- Market overview generation from aggregated news
+- Market overview generation using LangChain's refine summarization chain
+- Comprehensive aggregation of all ticker data for holistic market perspective
 
 ## Contributing
 
