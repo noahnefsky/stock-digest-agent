@@ -39,9 +39,9 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-4">
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-3 rounded-full">
               <TrendingUp className="h-8 w-8 text-white" />
@@ -50,9 +50,8 @@ const Index = () => {
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
             Daily Digest Generator
           </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Get comprehensive market insights and analysis for your favorite stocks. 
-            Enter ticker symbols below to generate your personalized daily digest.
+          <p className="text-xl text-gray-600 mx-auto">
+            Get comprehensive market insights and analysis for your favorite stocks, plus personalized recommendations.
           </p>
         </div>
 
@@ -65,8 +64,8 @@ const Index = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <TickerInput 
-              tickers={tickers} 
+            <TickerInput
+              tickers={tickers}
               onTickersChange={setTickers}
               onGenerateReport={handleGenerateReport}
               isGenerating={isGenerating}

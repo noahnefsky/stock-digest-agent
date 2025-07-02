@@ -1,7 +1,3 @@
-"""
-Prompt templates for the Stock Digest Agent
-"""
-
 def get_stock_analysis_prompt(ticker: str, research_data: dict | object, ticker_stories: list, current_date: str) -> str:
     """
     Generate the prompt for individual stock analysis
@@ -66,7 +62,7 @@ def get_market_overview_prompt(tickers: list, all_news_stories: list, current_da
         Formatted prompt string
     """
     return f"""
-    You are a senior market analyst creating a concise market overview based on recent news and developments.
+    You are a senior market analyst creating a concise market overview that connects individual stock developments to broader market trends.
     
     Analyze the following news stories from the past few days for these stocks: {', '.join(tickers)}
     
@@ -75,15 +71,8 @@ def get_market_overview_prompt(tickers: list, all_news_stories: list, current_da
     
     Current date: {current_date}
     
-    Create a concise market overview (4-5 sentences) that covers:
+    Create a concise market overview (5-7 sentences) covering overall market environemnt, trends and sentiment.
     
-     1. Market Sentiment
-        2. Emerging Themes
-        3. Notable Developments + Impact
-        4. Risks / Opportunities
-        5. Portfolio Actions to Consider
-    
-    Focus on cross-ticker patterns, high-impact news, and clear, actionable insights.
     """
 
 
@@ -103,4 +92,32 @@ def get_market_overview_summary_prompt() -> str:
 
     Analyze and incorporate the following research data:
     {text}
+    """
+
+
+def get_stock_recommendations_extraction_prompt(raw_text: str) -> str:
+    """
+    Generate the prompt for extracting stock recommendations from raw text.
+    
+    Args:
+        raw_text: Raw text containing stock recommendations
+    
+    Returns:
+        Formatted prompt string for extraction
+    """
+    return f"""
+    Extract stock ticker symbols and their detailed investment reasons from the following text.
+    Only return actual stock ticker symbols (2-5 letter codes like AAPL, MSFT, NVDA) and specific, detailed reasons.
+    
+    Text: {raw_text}
+    
+    Return as a JSON object with ticker symbols as keys and detailed reasons as values.
+    Example format: {{
+        "AAPL": "Strong iPhone 15 sales momentum, growing services revenue, expanding into AI with Apple Intelligence, solid cash position for buybacks",
+        "MSFT": "Azure cloud growth accelerating, AI integration across products, strong enterprise adoption, OpenAI partnership driving innovation"
+    }}
+    
+    Make the reasons specific and detailed (2-3 sentences) rather than generic phrases like "Top pick" or "Key stock".
+    Only include real stock tickers, not words like "AI", "Tech", etc.
+    Focus on concrete business drivers, financial metrics, or strategic advantages.
     """

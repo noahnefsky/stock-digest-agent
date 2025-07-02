@@ -42,6 +42,7 @@ export interface StockDigestResponse {
   reports: Record<string, StockReport>;
   generated_at: string;
   market_overview: string;
+  ticker_suggestions?: Record<string, string>;
   pdf_data?: PDFData;
 }
 

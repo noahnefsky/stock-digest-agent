@@ -45,6 +45,7 @@ async def analyze_stocks(request: StockDigestRequest):
             "reports": {},
             "generated_at": result.generated_at,
             "market_overview": result.market_overview,
+            "ticker_suggestions": result.ticker_suggestions,
         }
         
         # Convert each stock report to a dictionary

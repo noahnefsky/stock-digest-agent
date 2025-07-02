@@ -1,7 +1,3 @@
-"""
-Pydantic models for the stock digest agent
-"""
-
 from datetime import datetime
 from typing import Dict, List
 from typing import Optional as OptionalType
@@ -57,6 +53,7 @@ class StockDigestOutput(BaseModel):
     reports: Dict[str, StockReport] = Field(default_factory=dict)
     generated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     market_overview: str
+    ticker_suggestions: Dict[str, str]
 
 
 class PDFData(BaseModel):
@@ -72,4 +69,5 @@ class State(TypedDict):
     all_news_stories: List[tuple]
     structured_reports: StockDigestOutput
     pdf_data: OptionalType[PDFData]
-    date: str 
+    date: str
+    recommendations_raw_text: str 

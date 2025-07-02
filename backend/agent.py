@@ -13,9 +13,11 @@ from langchain_core.documents import Document
 from langgraph.graph import END, START, StateGraph
 from tavily import TavilyClient
 from polygon import RESTClient
+import json
+import re
 
-from prompts import get_stock_analysis_prompt, get_market_overview_summary_prompt
-from pdf_utils import generate_pdf
+from prompts import get_stock_analysis_prompt, get_market_overview_summary_prompt, get_stock_recommendations_extraction_prompt
+from agent_utils import generate_pdf
 from models import (
     StockFinanceData, TargetedResearch, StockReport,
     StockDigestOutput, PDFData, State
@@ -192,6 +194,7 @@ class StockDigestAgent:
         targeted_research = state.get("targeted_research", {})
         finance_data = state.get("finance_data", {})
 
+        # Collect all stories from research data
         all_stories = []
         for ticker in tickers:
             research = targeted_research.get(ticker, {})
@@ -201,12 +204,12 @@ class StockDigestAgent:
                 research_dict = research.model_dump()
             else:
                 research_dict = {}
-                
+            
             for category, stories in research_dict.items():
                 if category != 'ticker' and stories:
-                    for story in stories:
-                        all_stories.append((ticker, story.copy()))
+                    all_stories.extend((ticker, story.copy()) for story in stories)
 
+        # Generate reports for each ticker
         reports = {}
         for i, ticker in enumerate(tickers):
             ticker, report = self._analyze_ticker(ticker, targeted_research, finance_data, all_stories)
@@ -214,12 +217,14 @@ class StockDigestAgent:
             time.sleep(2)
             dispatch_custom_event("analysis_ticker", f"Completed {ticker} ({i+1}/{len(tickers)})")
 
-        structured_reports = StockDigestOutput(
-            reports=reports,
-            market_overview="",
-            generated_at=datetime.now().isoformat()
-        )
-        return {"structured_reports": structured_reports}
+        return {
+            "structured_reports": StockDigestOutput(
+                reports=reports,
+                market_overview="",
+                generated_at=datetime.now().isoformat(),
+                ticker_suggestions={}
+            )
+        }
 
     def market_overview_summary_node(self, state: State) -> Dict:
         dispatch_custom_event("market_overview_summary_status", "Creating detailed market overview...")
@@ -255,8 +260,76 @@ class StockDigestAgent:
         updated_reports = StockDigestOutput(
             reports=structured_reports.reports,
             market_overview=overview_result["output_text"],
-            generated_at=structured_reports.generated_at
+            generated_at=structured_reports.generated_at,
+            ticker_suggestions=structured_reports.ticker_suggestions
         )
+        return {"structured_reports": updated_reports}
+
+    def stock_recommendations_research_node(self, state: State) -> Dict:
+        """Node that searches for current stock recommendations using Tavily."""
+        dispatch_custom_event("stock_recommendations_status", "Finding current stock recommendations...")
+        
+        query = "best stock picks analyst recommendations buy rating upgrades 2025"
+        
+        search_results = self.tavily_client.search(
+            query=query,
+            search_depth="basic",
+            max_results=5,
+            include_answer=True,
+            include_domains=["seekingalpha.com", "marketwatch.com", "yahoo.com", "cnbc.com", "bloomberg.com", "reuters.com"]
+        )
+        
+        # Extract text from search results - try answer first, then results content
+        answer_text = search_results.get("answer", "")
+        if not answer_text and "results" in search_results:
+            # Fallback to combining content from search results
+            results_content = []
+            for result in search_results["results"][:3]:  # Use first 3 results
+                if "content" in result:
+                    results_content.append(result["content"][:300])  # Limit each result
+            answer_text = " ".join(results_content)
+        
+        logger.info(f"Stock recommendations found: {answer_text[:200]}...")
+        logger.info(f"Returning state with text length: {len(answer_text)}")
+        
+        return {"recommendations_raw_text": answer_text}
+
+    def recommendation_formatting_node(self, state: State) -> Dict:
+        """Node that formats stock recommendations using Gemini."""
+        dispatch_custom_event("recommendation_formatting_status", "Formatting stock recommendations...")
+        
+        raw_text = state.get("recommendations_raw_text", "")
+        logger.info(f"Formatting node received text length: {len(raw_text)}")
+        logger.info(f"Full state keys: {list(state.keys())}")
+        
+        if not raw_text or len(raw_text.strip()) < 50:
+            logger.warning(f"No sufficient recommendations text found. Text length: {len(raw_text)}")
+            ticker_suggestions = {}
+        else:
+            extraction_prompt = get_stock_recommendations_extraction_prompt(raw_text)
+            
+            response = self.gemini_llm.invoke(extraction_prompt)
+            
+            response_text = str(response.content)
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            
+            ticker_suggestions = {}
+            if json_match:
+                extracted_data = json.loads(json_match.group())
+                for ticker, reason in extracted_data.items():
+                    if re.match(r'^[A-Z]{2,5}$', ticker) and len(reason.strip()) > 0:
+                        ticker_suggestions[ticker] = reason.strip()
+            
+            logger.info(f"LLM extracted tickers: {ticker_suggestions}")
+        
+        structured_reports = state["structured_reports"]
+        updated_reports = StockDigestOutput(
+            reports=structured_reports.reports,
+            market_overview=structured_reports.market_overview,
+            generated_at=structured_reports.generated_at,
+            ticker_suggestions=ticker_suggestions
+        )
+        
         return {"structured_reports": updated_reports}
 
     def pdf_generation_node(self, state: State) -> Dict:
@@ -274,15 +347,18 @@ class StockDigestAgent:
         graph_builder.add_node("TargetedResearch", self.targeted_research_node)
         graph_builder.add_node("GeminiAnalysisFormatter", self.gemini_analysis_formatter_node)
         graph_builder.add_node("MarketOverviewSummary", self.market_overview_summary_node)
+        graph_builder.add_node("StockRecommendationsResearch", self.stock_recommendations_research_node)
+        graph_builder.add_node("RecommendationFormatting", self.recommendation_formatting_node)
         graph_builder.add_node("PDFGeneration", self.pdf_generation_node)
 
         graph_builder.add_edge(START, "StockMetrics")
         graph_builder.add_edge("StockMetrics", "TargetedResearch")
         graph_builder.add_edge("TargetedResearch", "GeminiAnalysisFormatter")
         graph_builder.add_edge("GeminiAnalysisFormatter", "MarketOverviewSummary")
-        graph_builder.add_edge("MarketOverviewSummary", "PDFGeneration")
+        graph_builder.add_edge("MarketOverviewSummary", "StockRecommendationsResearch")
+        graph_builder.add_edge("StockRecommendationsResearch", "RecommendationFormatting")
+        graph_builder.add_edge("RecommendationFormatting", "PDFGeneration")
         graph_builder.add_edge("PDFGeneration", END)
-
         return graph_builder.compile()
 
     async def run_digest(self, tickers: List[str]) -> StockDigestOutput:
