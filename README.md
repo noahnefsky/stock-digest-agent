@@ -4,9 +4,6 @@ A comprehensive stock analysis and digest generation system that provides detail
 
 ## Demo Video
 
-https://github.com/user-attachments/assets/0bc4ca78-4e95-4302-9eb7-c3beb3a110bc
-
-Full Video:
 https://www.loom.com/share/02f2214333554613913bf7161786bddd?sid=dd2dc6f4-880f-4e83-bfb7-8397df49d253
 
 ## Setup and Installation
