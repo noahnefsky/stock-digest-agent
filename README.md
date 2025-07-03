@@ -4,7 +4,7 @@ A comprehensive stock analysis and digest generation system that provides detail
 
 ## Demo
 
-https://github.com/your-username/stock-digest-agent/assets/Demo.mp4
+https://user-images.githubusercontent.com/your-user-id/stock-digest-agent/main/Demo.mp4
 
 *Watch the demo to see the Stock Digest Agent in action - generating comprehensive stock analysis reports with real-time data, AI-powered insights, and professional PDF exports.*
 
