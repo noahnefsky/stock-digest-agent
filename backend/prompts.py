@@ -65,20 +65,50 @@ def get_market_overview_summary_prompt() -> str:
     {text}
     """
 
+def get_stock_recommendations_prompt() -> str:
+    return """
+    You are a senior investment analyst tasked with identifying 6 promising stock opportunities for portfolio diversification.
+    
+    Research and analyze current market conditions, sector trends, and emerging opportunities to recommend 6 stocks that offer strong growth potential, solid fundamentals, or strategic positioning.
+    
+    Focus on:
+    - Companies with strong recent performance or positive catalysts
+    - Undervalued stocks with growth potential
+    - Emerging market leaders or disruptors
+    - Stocks with favorable analyst coverage or upgrades
+    - Companies with upcoming catalysts (earnings, product launches, etc.)
+    
+    Provide detailed reasoning for each recommendation including:
+    - Key business drivers and competitive advantages
+    - Recent developments or catalysts
+    - Financial strength and growth prospects
+    - Risk factors to consider
+    
+    Return exactly 6 stock recommendations with comprehensive analysis for each.
+    """
 
-def get_stock_recommendations_extraction_prompt(raw_text: str) -> str:
+def get_stock_recommendations_extraction_prompt(raw_text: str, exclude_tickers: list | None = None) -> str:
+    exclude_text = ""
+    if exclude_tickers:
+        exclude_text = f"\n\nIMPORTANT: Do NOT include any of these tickers in your recommendations: {', '.join(exclude_tickers)}"
+    
     return f"""
-    Extract stock ticker symbols and their detailed investment reasons from the following text.
-    Only return actual stock ticker symbols (2-5 letter codes like AAPL, MSFT, NVDA) and specific, detailed reasons.
+    Extract exactly 6 stock ticker symbols and their detailed investment reasons from the following text.
+    Only return actual stock ticker symbols (2-5 letter codes) and specific, detailed reasons.
     
-    Text: {raw_text}
+    Text: {raw_text}{exclude_text}
     
-    Return as a JSON object with ticker symbols as keys and detailed reasons as values.
+    Return as a JSON object with exactly 6 ticker symbols as keys and detailed reasons as values.
     Example format: {{
-        "AAPL": "Strong iPhone 15 sales momentum, growing services revenue, expanding into AI with Apple Intelligence, solid cash position for buybacks",
-        "MSFT": "Azure cloud growth accelerating, AI integration across products, strong enterprise adoption, OpenAI partnership driving innovation"
-    }}
+        "ticker": "reason (2-3 sentences)",
+        "ticker": "reason (2-3 sentences)",
+        "ticker": "reason (2-3 sentences)",
+        "ticker": "reason (2-3 sentences)",
+        "ticker": "reason (2-3 sentences)",
+        "ticker": "reason (2-3 sentences)",
+        }}
     
+    IMPORTANT: Return exactly 6 stock recommendations, no more, no less.
     Make the reasons specific and detailed (2-3 sentences) rather than generic phrases like "Top pick" or "Key stock".
     Only include real stock tickers, not words like "AI", "Tech", etc.
     Focus on concrete business drivers, financial metrics, or strategic advantages.

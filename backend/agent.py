@@ -1,7 +1,7 @@
 import logging
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List
 
 from dotenv import load_dotenv
@@ -247,57 +247,70 @@ class StockDigestAgent:
     def stock_recommendations_research_node(self, state: State) -> Dict:
         dispatch_custom_event("stock_recommendations_status", "Finding current stock recommendations...")
         
-        query = "best stock picks analyst recommendations buy rating upgrades 2025"
+        # Get user's existing tickers to exclude them from recommendations
+        user_tickers = state["tickers"]
+        user_tickers_str = " ".join(user_tickers)
         
-        search_results = self.tavily_client.search(
-            query=query,
-            search_depth="basic",
-            max_results=5,
-            include_answer=True,
-            include_domains=["seekingalpha.com", "marketwatch.com", "yahoo.com", "cnbc.com", "bloomberg.com", "reuters.com"]
-        )
+        # Create a query that excludes user's existing tickers and focuses on finding new opportunities
+        query = f"top stock picks 2025 analyst buy recommendations emerging growth stocks undervalued opportunities NOT {user_tickers_str}"
         
-        # Extract text from search results
-        answer_text = search_results.get("answer", "")
-        if not answer_text and "results" in search_results:
-            results_content = []
-            for result in search_results["results"][:3]:
-                if "content" in result:
-                    results_content.append(result["content"][:300])  # Limit each result for speed
-            answer_text = " ".join(results_content)
-        
-        logger.info(f"Stock recommendations found: {answer_text[:200]}...")
-        logger.info(f"Returning state with text length: {len(answer_text)}")
-        
-        return {"recommendations_raw_text": answer_text}
+        try:
+            search_results = self.tavily_client.search(
+                query=query,
+                search_depth="basic",
+                max_results=8,  # Increased to get more diverse results
+                include_answer=True,
+                include_domains=["seekingalpha.com", "marketwatch.com", "yahoo.com", "cnbc.com", "bloomberg.com", "reuters.com", "fool.com"]
+            )
+            
+            # Extract text from search results
+            answer_text = search_results.get("answer", "")
+            if not answer_text and "results" in search_results:
+                results_content = []
+                for result in search_results["results"][:6]:
+                    if "content" in result:
+                        results_content.append(result["content"][:400])  # Increased limit for better context
+                answer_text = " ".join(results_content)
+            
+            logger.info(f"Stock recommendations found: {answer_text[:300]}...")
+            logger.info(f"Returning state with text length: {len(answer_text)}")
+            
+            return {"recommendations_raw_text": answer_text}
+            
+        except Exception as e:
+            logger.error(f"Error in stock recommendations research: {e}")
+            return {"recommendations_raw_text": ""}
 
     def recommendation_formatting_node(self, state: State) -> Dict:
         dispatch_custom_event("recommendation_formatting_status", "Formatting stock recommendations...")
         
         raw_text = state.get("recommendations_raw_text", "")
+        user_tickers = state["tickers"]  # Get user's existing tickers to exclude them
         logger.info(f"Formatting node received text length: {len(raw_text)}")
-        logger.info(f"Full state keys: {list(state.keys())}")
         
-        if not raw_text or len(raw_text.strip()) < 50:
-            logger.warning(f"No sufficient recommendations text found. Text length: {len(raw_text)}")
-            ticker_suggestions = {}
-        else:
-            extraction_prompt = get_stock_recommendations_extraction_prompt(raw_text)
-            
+        ticker_suggestions = {}
+        
+        if raw_text and len(raw_text.strip()) >= 50:
+            extraction_prompt = get_stock_recommendations_extraction_prompt(raw_text, exclude_tickers=user_tickers)
             response = self.gemini_llm.invoke(extraction_prompt)
-            
             response_text = str(response.content)
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             
-            ticker_suggestions = {}
+            # Extract JSON from response
+            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response_text, re.DOTALL) or re.search(r'\{.*\}', response_text, re.DOTALL)
+            
             if json_match:
                 extracted_data = json.loads(json_match.group())
+                logger.info(f"Successfully parsed JSON: {extracted_data}")
+                
+                # Validate and extract tickers from JSON, excluding user's existing tickers
                 for ticker, reason in extracted_data.items():
-                    if re.match(r'^[A-Z]{2,5}$', ticker) and len(reason.strip()) > 0:
+                    if (re.match(r'^[A-Z]{2,5}$', ticker) and reason.strip() and 
+                        ticker not in user_tickers):  # Exclude user's existing tickers
                         ticker_suggestions[ticker] = reason.strip()
-            
-            logger.info(f"LLM extracted tickers: {ticker_suggestions}")
         
+        logger.info(f"Final ticker suggestions (excluding user's {user_tickers}): {ticker_suggestions}")
+        
+        # Update structured reports with ticker suggestions
         structured_reports = state["structured_reports"]
         updated_reports = StockDigestOutput(
             reports=structured_reports.reports,

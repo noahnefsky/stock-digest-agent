@@ -23,7 +23,8 @@ const Index = () => {
       },
       body: JSON.stringify({ tickers }),
     });
-    setStockDigest(await response.json());
+    const data = await response.json();
+    setStockDigest(data);
     setIsGenerating(false);
     setShowReport(true);
   };
